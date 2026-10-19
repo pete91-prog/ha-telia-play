@@ -1,0 +1,60 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Telia Play",
+        "description": "Logg inn med Telia Play-kontoen som har TV-poeng (Valgmenyen). Du kan slå strømmetjenester av og på med poengene som inngår i abonnementet.",
+        "data": {
+          "country": "Land",
+          "username": "Brukernavn",
+          "password": "Passord",
+          "include_channels": "Lag også brytere for kanalpakker"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Logg inn på Telia Play på nytt",
+        "data": {
+          "username": "Brukernavn",
+          "password": "Passord"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Innloggingen mislyktes. Sjekk brukernavn og passord. Første gangs innlogging på Telia Play i Norge kan kreve BankID på teliaplay.no.",
+      "cannot_connect": "Fikk ikke kontakt med Telia Play.",
+      "no_selection_menu": "Innloggingen gikk bra, men denne kontoen har ingen Valgmeny / TV-poeng. Det brukes på Telia Play i Norge."
+    },
+    "abort": {
+      "already_configured": "Denne Telia Play-kontoen er allerede satt opp.",
+      "reauth_successful": "Logget inn på nytt."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Telia Play-innstillinger",
+        "data": {
+          "include_channels": "Lag også brytere for kanalpakker"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "points_remaining": {
+        "name": "TV-poeng igjen"
+      },
+      "points_used": {
+        "name": "TV-poeng i bruk"
+      },
+      "points_total": {
+        "name": "TV-poeng inkludert"
+      }
+    },
+    "button": {
+      "activate": {
+        "name": "Aktiver {name}"
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "entity": {
+    "sensor": {
+      "points_remaining": {
+        "default": "mdi:star-four-points"
+      },
+      "points_used": {
+        "default": "mdi:star-four-points-outline"
+      },
+      "points_total": {
+        "default": "mdi:star-four-points-circle"
+      }
+    },
+    "button": {
+      "activate": {
+        "default": "mdi:qrcode"
+      }
+    }
+  }
+}

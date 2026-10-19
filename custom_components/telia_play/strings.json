@@ -1,0 +1,65 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Telia Play",
+        "description": "Sign in with the Telia Play account that has TV points (Valgmeny). Norway is the market that uses included points to pick streaming services.",
+        "data": {
+          "country": "Country",
+          "username": "Username",
+          "password": "Password",
+          "include_channels": "Also create switches for channel packages"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate Telia Play",
+        "data": {
+          "username": "Username",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Could not sign in. Check the username and password. The first Telia Play Norway login may need BankID on teliaplay.no.",
+      "cannot_connect": "Could not reach Telia Play.",
+      "no_selection_menu": "Signed in, but this account has no Valgmeny / TV points selection. That feature is used on Telia Play Norway."
+    },
+    "abort": {
+      "already_configured": "This Telia Play account is already configured.",
+      "reauth_successful": "Signed in again."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Telia Play options",
+        "data": {
+          "include_channels": "Also create switches for channel packages"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "points_remaining": {
+        "name": "TV points remaining"
+      },
+      "points_used": {
+        "name": "TV points used"
+      },
+      "points_total": {
+        "name": "TV points included"
+      }
+    },
+    "button": {
+      "activate": {
+        "name": "Activate {name}"
+      }
+    }
+  },
+  "exceptions": {
+    "not_enough_points": {
+      "message": "Not enough included TV points for that selection."
+    }
+  }
+}

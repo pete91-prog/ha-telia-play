@@ -1,0 +1,16 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Telia Play",
+        "description": "Logga in med Telia Play-kontot. TV-poäng (Valgmeny) för att välja streamingtjänster används i Norge.",
+        "data": {
+          "country": "Land",
+          "username": "Användarnamn",
+          "password": "Lösenord",
+          "include_channels": "Skapa även switchar för kanalpaket"
+        }
+      }
+    }
+  }
+}

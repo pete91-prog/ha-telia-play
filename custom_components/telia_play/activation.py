@@ -1,0 +1,151 @@
+"""Helpers that start partner activation without waiting for email."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+import re
+
+from .const import TELIA_AUTH_HOST_SUFFIXES
+
+STATUS_COMPLETED = "completed"
+STATUS_STARTED = "started"
+STATUS_CODE_READY = "code_ready"
+STATUS_NEEDS_CODE = "needs_code"
+STATUS_FAILED = "failed"
+
+_CODE_PATTERNS = (
+    re.compile(
+        r'["\'](?:activation)?(?:code|kode|otp|pin)["\']\s*[:=]\s*["\']([A-Za-z0-9]{4,12})["\']',
+        re.I,
+    ),
+    re.compile(r'data-(?:activation-)?code=["\']([A-Za-z0-9]{4,12})["\']', re.I),
+    re.compile(
+        r"(?:activation code|aktiveringskode|your code|koden din|"
+        r"enter this code|bruk denne koden|pairing code|tv-kode)"
+        r"[^\w]{0,48}([A-Z0-9]{4,8})",
+        re.I,
+    ),
+)
+
+_SUCCESS_HINTS = (
+    "activated",
+    "activation-complete",
+    "already-active",
+    "success",
+    "confirmed",
+    "fullfort",
+    "fullført",
+    "aktivert",
+)
+_PENDING_HINTS = (
+    "enter code",
+    "enter the code",
+    "skriv inn",
+    "aktiveringskode",
+    "verification code",
+    "verify",
+    "one-time",
+    "otp",
+)
+
+
+@dataclass(slots=True)
+class ActivationResult:
+    """Outcome of opening a Telia / partner activation link."""
+
+    item_id: str
+    name: str
+    status: str
+    message: str
+    activation_url: str | None = None
+    pairing_code: str | None = None
+    family_id: str | None = None
+    final_url: str | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def done(self) -> bool:
+        return self.status == STATUS_COMPLETED
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.item_id,
+            "name": self.name,
+            "status": self.status,
+            "message": self.message,
+            "activation_url": self.activation_url,
+            "pairing_code": self.pairing_code,
+            "family_id": self.family_id,
+        }
+
+
+def is_telia_host(url: str) -> bool:
+    host = (urlparse(url).hostname or "").lower()
+    if not host:
+        return False
+    return any(host == suffix or host.endswith("." + suffix) for suffix in TELIA_AUTH_HOST_SUFFIXES)
+
+
+def looks_like_url(value: str) -> bool:
+    text = value.strip()
+    parsed = urlparse(text)
+    return parsed.scheme in ("http", "https") and bool(parsed.netloc)
+
+
+def with_query(url: str, **params: str | None) -> str:
+    """Add query params without dropping existing ones."""
+    parsed = urlparse(url)
+    query = parse_qs(parsed.query, keep_blank_values=True)
+    for key, value in params.items():
+        if value:
+            query[key] = [value]
+    encoded = urlencode(query, doseq=True)
+    return urlunparse(parsed._replace(query=encoded))
+
+
+def with_partner_token(url: str, token: str | None) -> str:
+    if not url or not token:
+        return url
+    return with_query(url, partnerToken=token, token=token)
+
+
+def extract_activation_code(text: str | None) -> str | None:
+    """Pull a pairing / activation code out of HTML or JSON if Telia already issued one."""
+    if not text:
+        return None
+    for pattern in _CODE_PATTERNS:
+        match = pattern.search(text)
+        if match:
+            code = match.group(1).strip()
+            if code.lower() not in {"null", "true", "false", "code", "kode"}:
+                return code
+    return None
+
+
+def infer_status(*, final_url: str | None, body: str | None, http_status: int | None) -> str:
+    blob = f"{final_url or ''} {body or ''}".lower()
+    if any(hint in blob for hint in _SUCCESS_HINTS) and "enter" not in blob:
+        return STATUS_COMPLETED
+    if extract_activation_code(body):
+        return STATUS_CODE_READY
+    if any(hint in blob for hint in _PENDING_HINTS):
+        return STATUS_NEEDS_CODE
+    if http_status is not None and http_status >= 400:
+        return STATUS_FAILED
+    if http_status == 200:
+        return STATUS_STARTED
+    return STATUS_STARTED
+
+
+def code_payloads(code: str) -> list[dict[str, str]]:
+    """Bodies Telia / partner pages commonly accept for a pasted activation code."""
+    return [
+        {"code": code},
+        {"activationCode": code},
+        {"activation_code": code},
+        {"otp": code},
+        {"pinCode": code},
+        {"pin": code},
+    ]

@@ -1,0 +1,69 @@
+enable_service:
+  name: Enable streaming service
+  description: Spend included TV points to turn a Telia Play streaming service or channel package on.
+  fields:
+    service:
+      name: Service
+      description: Name or id, for example Netflix, Max, or Viaplay.
+      required: true
+      example: Netflix
+      selector:
+        text:
+
+disable_service:
+  name: Disable streaming service
+  description: Turn a service off and return its TV points to the included pool.
+  fields:
+    service:
+      name: Service
+      description: Name or id of the service to remove.
+      required: true
+      example: Netflix
+      selector:
+        text:
+
+set_streaming_services:
+  name: Set streaming services
+  description: Replace the enabled streaming services with this list. Channel packages stay as they are. The total must fit in the points included in the subscription.
+  fields:
+    services:
+      name: Services
+      description: Streaming services to enable, for example Netflix and Max.
+      required: true
+      example:
+        - Netflix
+        - Max
+      selector:
+        text:
+          multiple: true
+
+activate_service:
+  name: Activate streaming service
+  description: Open Telia's activation link immediately (the same URL that would arrive by email or QR) and fetch a partner SSO token. Use this instead of waiting for mail.
+  fields:
+    service:
+      name: Service
+      description: Name or id, for example Netflix or Viaplay.
+      required: true
+      example: Netflix
+      selector:
+        text:
+
+submit_activation_code:
+  name: Submit activation code
+  description: Paste a code or magic link if a partner still sent one. A full https URL from the mail also works.
+  fields:
+    service:
+      name: Service
+      description: Name or id of the service the code belongs to.
+      required: true
+      example: Viaplay
+      selector:
+        text:
+    code:
+      name: Code
+      description: Activation code, PIN, or the full link from the email.
+      required: true
+      example: AB12CD
+      selector:
+        text:
