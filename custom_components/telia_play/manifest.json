@@ -1,11 +1,12 @@
 {
   "domain": "telia_play",
   "name": "Telia Play",
-  "codeowners": [],
+  "codeowners": ["@pete91-prog"],
   "config_flow": true,
-  "documentation": "https://www.telia.no/tv/slik-velger-du-innhold/",
+  "documentation": "https://github.com/pete91-prog/ha-telia-play",
   "integration_type": "service",
   "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/pete91-prog/ha-telia-play/issues",
   "loggers": ["custom_components.telia_play"],
   "requirements": [],
   "version": "1.1.0"

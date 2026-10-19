@@ -1,5 +1,8 @@
 # Telia Play for Home Assistant
 
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=pete91-prog&repository=ha-telia-play&category=integration)
+
 Choose which **streaming services** are enabled on your Telia Play subscription, using the **TV points** that are already included.
 
 This talks to the same **Valgmeny** as [teliaplay.no](https://account.teliaplay.no/subscription/selection-menu): you turn Netflix, Max, Viaplay, and the other services on or off. Points are not spent forever — turning a service off gives the points back.
@@ -34,12 +37,31 @@ A persistent notification is created per service, with a one-tap activation link
 
 Netflix / Max may still ask you to sign in to *their* account in the browser. That login belongs to them; this only skips Telia’s “wait for the email” step.
 
-## Install
+## Install with HACS
 
-1. Copy `custom_components/telia_play` into your Home Assistant `config/custom_components/` folder.
-2. Restart Home Assistant.
-3. Settings → Devices & services → Add integration → **Telia Play**.
-4. Country **Norway**, then the Telia Play username and password.
+### One tap (recommended)
+
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=pete91-prog&repository=ha-telia-play&category=integration)
+
+That opens HACS on your Home Assistant and adds [pete91-prog/ha-telia-play](https://github.com/pete91-prog/ha-telia-play) as a custom integration.
+
+### Manually in HACS
+
+1. Open **HACS** in Home Assistant.
+2. Three dots (top right) → **Custom repositories**.
+3. Repository: `https://github.com/pete91-prog/ha-telia-play`
+4. Type: **Integration** → **Add**.
+5. Search for **Telia Play** → **Download**.
+6. Restart Home Assistant.
+
+### Without HACS
+
+Copy `custom_components/telia_play` into `config/custom_components/`, then restart.
+
+### Configure
+
+1. Settings → Devices & services → Add integration → **Telia Play**.
+2. Country **Norway**, then the Telia Play username and password.
 
 The first login on Telia Play Norway may need BankID on [teliaplay.no](https://www.teliaplay.no/). After that, the same password works here.
 
