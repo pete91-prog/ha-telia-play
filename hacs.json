@@ -2,6 +2,5 @@
   "name": "Telia Play",
   "render_readme": true,
   "homeassistant": "2024.1.0",
-  "country": ["NO", "SE", "DK", "FI"],
-  "hide_default_branch": false
+  "country": ["NO", "SE", "DK", "FI"]
 }
