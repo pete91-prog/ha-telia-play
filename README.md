@@ -38,8 +38,20 @@ A persistent notification is created per service, with a one-tap activation link
 How partners usually finish:
 
 - **Prime** — Telia’s activation link is enough. No SMS or email code.
-- **HBO / Max** — the SMS goes to `activate.teliacompany.com/startactivation/…/max/…`. Paste that link if it is unused. If it is **already opened on the phone**, that UUID is spent: finish Max on that phone (the email code only works there), or press **Activate HBO/Max** so Telia can issue a new link.
+- **HBO / Max** — the SMS goes to `activate.teliacompany.com/startactivation/…/max/…`. Paste that link if it is unused. If it is **already opened on the phone**, that UUID is spent: finish Max on that phone (the email code only works there), or press **Activate HBO/Max** so Telia can issue a new link. The 6-digit **email** code can be submitted automatically from a mailbox you own (see below).
 - **Netflix** (and similar) — may still ask you to sign in to *their* account in the browser. That login belongs to them; this only skips Telia’s “wait for the email” step.
+
+### Automatic Max email codes
+
+Home Assistant can finish Max without you pasting the 6-digit code, using **your** inbox. This integration does **not** create or host a shared mailbox for those emails.
+
+1. Use the same address on the Max page as the inbox Home Assistant can read, **or** forward Max mail to that inbox.
+2. Either:
+   - **Telia Play → Configure**: IMAP server (Gmail: `imap.gmail.com`), port `993`, mailbox email, and password. Gmail needs an [app password](https://support.google.com/accounts/answer/185833) and IMAP enabled.
+   - **or** add Home Assistant’s built-in **IMAP** integration on that same inbox. New `imap_content` events are picked up automatically.
+3. Enable Max (or press **Activate HBO/Max**). Telia’s SMS link is opened from the API; when Max mails the code, it is submitted on its own.
+
+Polling runs only while Max still needs a code. The mailbox password stays in the Telia Play config entry (same as your Telia password).
 
 ## Install with HACS
 
@@ -72,6 +84,8 @@ Copy `custom_components/telia_play` into `config/custom_components/`, then resta
 The first Telia Play Norway login on a new device may need BankID on [teliaplay.no](https://www.teliaplay.no/).
 
 Optional: enable **Also create switches for channel packages** if you also want to spend points on TV channels, not only streaming services.
+
+To let Max activation finish by itself, open **Configure** on the Telia Play integration and add IMAP for a mailbox you own — or add Home Assistant’s IMAP integration on that inbox.
 
 ## Use it
 
@@ -111,7 +125,7 @@ data:
   service: Viaplay
 ```
 
-Paste a code or magic link if a partner still sent one. **Max** typically texts an `https://` link, then emails a 6-digit one-time code — paste the SMS link first, then the email code (the service name is optional if only Max is waiting):
+Paste a code or magic link if a partner still sent one. **Max** typically texts an `https://` link, then emails a 6-digit one-time code. If the mailbox is connected, the email code is submitted automatically. You can still paste the SMS link first, then the email code (the service name is optional if only Max is waiting):
 
 ```yaml
 action: telia_play.submit_activation_code

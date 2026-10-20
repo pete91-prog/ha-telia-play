@@ -41,10 +41,23 @@
     "step": {
       "init": {
         "title": "Telia Play-inställningar",
+        "description": "Valfri brevlåda: Home Assistant läser Max engångskoder från en inkorg du äger (inte en delad brevlåda). Använd samma adress som du skriver på Max-sidan, eller vidarebefordra Max-post dit. Gmail behöver ett applösenord. Home Assistants IMAP-integration används också automatiskt.",
         "data": {
-          "include_channels": "Skapa även switchar för kanalpaket"
+          "include_channels": "Skapa även switchar för kanalpaket",
+          "imap_host": "IMAP-server för inkorgen",
+          "imap_port": "IMAP-port",
+          "imap_username": "E-postadress för inkorgen",
+          "imap_password": "Lösenord (Gmail-applösenord)"
+        },
+        "data_description": {
+          "imap_username": "Lämna tomt för att stänga av inkorgskoll. IMAP-händelser i Home Assistant fungerar ändå.",
+          "imap_password": "Lämna tomt för att behålla det lösenord som redan är sparat."
         }
       }
+    },
+    "error": {
+      "imap_failed": "Det gick inte att logga in på den inkorgen. För Gmail: använd applösenord och slå på IMAP.",
+      "imap_password_required": "Ange inkorgens lösenord (eller ett Gmail-applösenord)."
     }
   },
   "entity": {

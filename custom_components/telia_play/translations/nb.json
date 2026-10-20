@@ -41,10 +41,23 @@
     "step": {
       "init": {
         "title": "Telia Play-innstillinger",
+        "description": "Valgfri innboks: Home Assistant leser Max-engangkoder fra en e-postkonto du eier (ikke en delt innboks). Bruk samme adresse som du skriver på Max-siden, eller videresend Max-post dit. Gmail trenger app-passord. Home Assistant sin IMAP-integrasjon brukes også automatisk.",
         "data": {
-          "include_channels": "Lag også brytere for kanalpakker"
+          "include_channels": "Lag også brytere for kanalpakker",
+          "imap_host": "IMAP-server for innboksen",
+          "imap_port": "IMAP-port",
+          "imap_username": "E-postadresse for innboksen",
+          "imap_password": "Passord (Gmail app-passord)"
+        },
+        "data_description": {
+          "imap_username": "La stå tom for å slå av innbokssjekk. IMAP-hendelser i Home Assistant fungerer likevel.",
+          "imap_password": "La stå tom for å beholde passordet som allerede er lagret."
         }
       }
+    },
+    "error": {
+      "imap_failed": "Fikk ikke logget inn på den innboksen. For Gmail: bruk app-passord og slå på IMAP.",
+      "imap_password_required": "Skriv inn passordet til innboksen (eller et Gmail app-passord)."
     }
   },
   "entity": {

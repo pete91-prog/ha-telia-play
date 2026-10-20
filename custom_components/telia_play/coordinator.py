@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 import logging
 
 from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .activation import (
@@ -19,9 +21,13 @@ from .activation import (
     STATUS_COMPLETED,
     STATUS_FAILED,
     STATUS_NEEDS_CODE,
+    STATUS_STARTED,
     ActivationResult,
     activation_token,
     apply_partner_status,
+    event_mail_text,
+    extract_max_email_code,
+    is_max_email,
     max_partner_ids,
     next_activation_target,
     parse_activation_input,
@@ -35,14 +41,25 @@ from .const import (
     CONF_BOOT_ID,
     CONF_COUNTRY,
     CONF_DEVICE_ID,
+    CONF_IMAP_FOLDER,
+    CONF_IMAP_HOST,
+    CONF_IMAP_PASSWORD,
+    CONF_IMAP_PORT,
+    CONF_IMAP_USERNAME,
     CONF_INCLUDE_CHANNELS,
     CONF_PASSWORD,
     CONF_REFRESH_TOKEN,
     CONF_USERNAME,
     CONF_VALID_TO,
+    DEFAULT_IMAP_FOLDER,
+    DEFAULT_IMAP_HOST,
+    DEFAULT_IMAP_PORT,
+    EVENT_IMAP_CONTENT,
+    IMAP_POLL_SECONDS,
     NOTIFICATION_ID_PREFIX,
     SCAN_INTERVAL_SECONDS,
 )
+from .mail import MailError, fetch_recent_messages
 from .models import (
     CatalogItem,
     NotEnoughPointsError,
@@ -82,6 +99,11 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
         )
         self.activations: dict[str, ActivationResult] = {}
         self._bootstrapped_activation = False
+        self._mail_started = False
+        self._mail_lock = asyncio.Lock()
+        self._imap_busy = False
+        self._seen_mail_uids: set[str] = set()
+        self._used_mail_codes: set[str] = set()
 
     @property
     def menu(self) -> SelectionMenu:
@@ -95,6 +117,11 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
             self.entry.options.get(CONF_INCLUDE_CHANNELS)
             or self.entry.data.get(CONF_INCLUDE_CHANNELS)
         )
+
+    @property
+    def imap_configured(self) -> bool:
+        options = self.entry.options
+        return bool(options.get(CONF_IMAP_USERNAME) and options.get(CONF_IMAP_PASSWORD))
 
     def items_for_switches(self) -> list[CatalogItem]:
         if self.data is None:
@@ -270,6 +297,8 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
         if notify:
             self._notify_activation(result)
         self.async_update_listeners()
+        if result.status in {STATUS_NEEDS_CODE, STATUS_STARTED}:
+            self._schedule_mail_poll()
         return result
 
     async def _async_activate_pending(self, menu: SelectionMenu, *, notify: bool) -> None:
@@ -403,12 +432,22 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
                     "HBO/Max to ask Telia for a new link, or finish Max on that phone."
                 )
             elif kind == KIND_MAX:
-                message = (
-                    "HBO / Max is not finished yet. Paste the SMS https link from "
-                    "activate.teliacompany.com into the Activation code box, then the "
-                    "6-digit Max email code. If the link was already opened on the phone, "
-                    "finish it there or press Activate to get a new Telia link."
-                )
+                if self.imap_configured:
+                    message = (
+                        "HBO / Max is waiting for the email one-time code. Home Assistant "
+                        "is watching your mailbox and will submit it automatically. Use "
+                        "the same address on the Max page as that inbox."
+                    )
+                else:
+                    message = (
+                        "HBO / Max is not finished yet. Home Assistant will submit the "
+                        "6-digit Max email code automatically if this inbox is connected "
+                        "(Telia Play options, or Home Assistant's IMAP integration). Use "
+                        "the same email on the Max page as that mailbox. You can still "
+                        "paste the SMS https link or the code. If the SMS link was already "
+                        "opened on the phone, finish it there or press Activate for a new "
+                        "Telia link."
+                    )
             else:
                 message = (
                     f"{item.name} still wants a partner code. Open the activation link "
@@ -503,3 +542,121 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
             title=f"Activate {result.name}",
             notification_id=notification_id,
         )
+
+    def async_start_mail(self) -> None:
+        """Watch a user-owned mailbox and Home Assistant IMAP events for Max codes."""
+        if self._mail_started:
+            return
+        self._mail_started = True
+        self.entry.async_on_unload(
+            self.hass.bus.async_listen(EVENT_IMAP_CONTENT, self.async_imap_content)
+        )
+        self.entry.async_on_unload(
+            async_track_time_interval(
+                self.hass,
+                self.async_poll_imap,
+                timedelta(seconds=IMAP_POLL_SECONDS),
+            )
+        )
+        self._schedule_mail_poll()
+
+    def _schedule_mail_poll(self) -> None:
+        if self.hass.is_stopping:
+            return
+        self.hass.async_create_task(self.async_poll_imap())
+
+    def _max_waiting_for_code(self) -> bool:
+        if self.data is None:
+            return False
+        for item in self.data.streaming_services:
+            kind = partner_kind(
+                name=item.name,
+                family_name=item.family_name,
+                family_id=item.family_id,
+                url=item.activation_url,
+            )
+            if kind != KIND_MAX:
+                continue
+            result = self.activations.get(item.id)
+            if result is not None and result.status in {
+                STATUS_NEEDS_CODE,
+                STATUS_STARTED,
+                STATUS_CODE_READY,
+            }:
+                return True
+            if item.needs_activation:
+                return True
+        return False
+
+    async def async_imap_content(self, event: Event) -> None:
+        """Home Assistant IMAP integration delivered a new message."""
+        if not self._max_waiting_for_code():
+            return
+        data = event.data or {}
+        sender = str(data.get("sender") or "")
+        subject = str(data.get("subject") or "")
+        body = event_mail_text(data)
+        if not is_max_email(sender=sender, subject=subject, body=body):
+            return
+        uid = str(data.get("uid") or "")
+        if uid:
+            if uid in self._seen_mail_uids:
+                return
+            self._seen_mail_uids.add(uid)
+        code = extract_max_email_code(f"{subject}\n{body}")
+        if code:
+            await self._async_ingest_mail_code(code, source="imap_content")
+
+    async def async_poll_imap(self, _now=None) -> None:
+        """Read the configured inbox only while Max still needs a code."""
+        if not self.imap_configured or not self._max_waiting_for_code() or self._imap_busy:
+            return
+        self._imap_busy = True
+        try:
+            options = self.entry.options
+            messages = await self.hass.async_add_executor_job(
+                fetch_recent_messages,
+                str(options.get(CONF_IMAP_HOST) or DEFAULT_IMAP_HOST),
+                int(options.get(CONF_IMAP_PORT) or DEFAULT_IMAP_PORT),
+                str(options.get(CONF_IMAP_USERNAME) or ""),
+                str(options.get(CONF_IMAP_PASSWORD) or ""),
+                str(options.get(CONF_IMAP_FOLDER) or DEFAULT_IMAP_FOLDER),
+            )
+            for message in messages:
+                if message.uid in self._seen_mail_uids:
+                    continue
+                self._seen_mail_uids.add(message.uid)
+                if not is_max_email(
+                    sender=message.sender,
+                    subject=message.subject,
+                    body=message.body,
+                ):
+                    continue
+                code = extract_max_email_code(f"{message.subject}\n{message.body}")
+                if not code:
+                    continue
+                await self._async_ingest_mail_code(code, source="imap")
+                break
+        except MailError as err:
+            _LOGGER.warning("Max mailbox poll failed: %s", err)
+        except Exception as err:  # noqa: BLE001 - never fail the coordinator on mail
+            _LOGGER.warning("Max mailbox poll failed: %s", err)
+        finally:
+            self._imap_busy = False
+
+    async def _async_ingest_mail_code(self, code: str, *, source: str) -> None:
+        async with self._mail_lock:
+            if code in self._used_mail_codes or not self._max_waiting_for_code():
+                return
+            self._used_mail_codes.add(code)
+            if len(self._used_mail_codes) > 20:
+                self._used_mail_codes = set(list(self._used_mail_codes)[-20:])
+            _LOGGER.info("Submitting Max one-time code from %s", source)
+            try:
+                result = await self.async_submit_code("Max", code)
+            except HomeAssistantError as err:
+                _LOGGER.warning("Could not submit Max mail code: %s", err)
+                self._used_mail_codes.discard(code)
+                return
+            if result.status == STATUS_COMPLETED:
+                _LOGGER.info("Max activation finished from %s", source)

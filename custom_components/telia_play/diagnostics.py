@@ -8,10 +8,22 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_ACCESS_TOKEN, CONF_PASSWORD, CONF_REFRESH_TOKEN, DOMAIN
+from .const import (
+    CONF_ACCESS_TOKEN,
+    CONF_IMAP_PASSWORD,
+    CONF_PASSWORD,
+    CONF_REFRESH_TOKEN,
+    DOMAIN,
+)
 from .coordinator import TeliaPlayCoordinator
 
-TO_REDACT = {CONF_PASSWORD, CONF_ACCESS_TOKEN, CONF_REFRESH_TOKEN, "raw"}
+TO_REDACT = {
+    CONF_PASSWORD,
+    CONF_ACCESS_TOKEN,
+    CONF_REFRESH_TOKEN,
+    CONF_IMAP_PASSWORD,
+    "raw",
+}
 
 
 async def async_get_config_entry_diagnostics(
@@ -21,7 +33,8 @@ async def async_get_config_entry_diagnostics(
     menu = coordinator.data
     return {
         "entry": async_redact_data(dict(entry.data), TO_REDACT),
-        "options": dict(entry.options),
+        "options": async_redact_data(dict(entry.options), TO_REDACT),
+        "imap": {"configured": coordinator.imap_configured},
         "points": None
         if menu is None
         else {

@@ -51,7 +51,7 @@ activate_service:
 
 submit_activation_code:
   name: Submit activation code
-  description: Paste the Max SMS link, then the 6-digit email code. A full https URL also works. Service can be omitted when only Max is waiting.
+  description: Paste the Max SMS link, then the 6-digit email code. A full https URL also works. Service can be omitted when only Max is waiting. The email code is submitted automatically when a mailbox you own is connected.
   fields:
     service:
       name: Service

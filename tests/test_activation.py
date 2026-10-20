@@ -60,6 +60,10 @@ ActivationResult = activation.ActivationResult
 with_partner_token = activation.with_partner_token
 with_query = activation.with_query
 wants_email = activation.wants_email
+extract_max_email_code = activation.extract_max_email_code
+is_max_email = activation.is_max_email
+strip_html = activation.strip_html
+event_mail_text = activation.event_mail_text
 KIND_MAX = activation.KIND_MAX
 KIND_PRIME = activation.KIND_PRIME
 STATUS_STARTED = activation.STATUS_STARTED
@@ -330,6 +334,43 @@ class ActivationHelperTests(unittest.TestCase):
             apply_partner_status(STATUS_STARTED, kind=KIND_MAX, http_status=200),
             STATUS_NEEDS_CODE,
         )
+
+    def test_extract_max_email_html_code(self) -> None:
+        html = (
+            "<p>Your HBO Max verification code is:</p>"
+            "<h1 style='font-size:32px'>847291</h1>"
+        )
+        self.assertEqual(extract_max_email_code(html), "847291")
+        self.assertIn("verification code", strip_html(html).lower())
+
+    def test_extract_max_email_labeled_plain(self) -> None:
+        self.assertEqual(
+            extract_max_email_code("Your one-time code is 102938"),
+            "102938",
+        )
+
+    def test_is_max_email_from_sender(self) -> None:
+        self.assertTrue(
+            is_max_email(sender="HBO Max <noreply@email.max.com>", subject="Code")
+        )
+        self.assertTrue(
+            is_max_email(
+                sender="shop@example.com",
+                subject="Receipt",
+                body="Finish on play.max.com with code 111222",
+            )
+        )
+        self.assertFalse(
+            is_max_email(
+                sender="bank@example.com",
+                subject="Your verification code",
+                body="Your one-time code is 111222",
+            )
+        )
+
+    def test_event_mail_text(self) -> None:
+        self.assertEqual(event_mail_text({"text": "hello"}), "hello")
+        self.assertEqual(event_mail_text({"body": {"plain": "hi"}}), "hi")
 
 
 if __name__ == "__main__":

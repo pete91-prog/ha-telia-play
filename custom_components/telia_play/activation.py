@@ -406,3 +406,88 @@ def email_payloads(email: str) -> list[dict[str, str]]:
         {"username": email},
         {"login": email},
     ]
+
+
+_HTML_TAG = re.compile(r"<[^>]+>")
+_MAX_SENDER_HINTS = (
+    "max.com",
+    "hbomax.com",
+    "hbo.com",
+    "warnermedia.com",
+    "wbd.com",
+)
+_MAX_BODY_HINTS = (
+    "hbo max",
+    "hbomax",
+    "play.max.com",
+    "auth.max.com",
+    "www.max.com",
+)
+_MAX_CODE_LABELED = re.compile(
+    r"(?:one[- ]time(?:\s+code)?|verification code|aktiveringskode|"
+    r"your code|koden din|security code|passcode|otp)"
+    r"[^\d]{0,40}(\d{6})",
+    re.I,
+)
+
+
+def strip_html(text: str | None) -> str:
+    """Flatten HTML mail so a 6-digit Max code can be read."""
+    if not text:
+        return ""
+    plain = _HTML_TAG.sub(" ", text)
+    plain = (
+        plain.replace("&nbsp;", " ")
+        .replace("&#160;", " ")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+    )
+    return re.sub(r"\s+", " ", plain).strip()
+
+
+def is_max_email(
+    *,
+    sender: str | None = None,
+    subject: str | None = None,
+    body: str | None = None,
+) -> bool:
+    """True when a message looks like Max / HBO Max, not any random OTP."""
+    sender_l = (sender or "").lower()
+    if any(hint in sender_l for hint in _MAX_SENDER_HINTS):
+        return True
+    subject_l = (subject or "").lower()
+    body_l = strip_html(body).lower()
+    blob = f"{subject_l} {body_l}"
+    if any(hint in blob for hint in _MAX_BODY_HINTS):
+        return True
+    if "max" in subject_l and any(
+        hint in subject_l for hint in ("code", "kode", "verif", "activ", "otp", "sign")
+    ):
+        return True
+    return False
+
+
+def extract_max_email_code(text: str | None) -> str | None:
+    """Pull the 6-digit Max one-time code out of an email body or subject."""
+    if not text:
+        return None
+    plain = strip_html(text)
+    labeled = _MAX_CODE_LABELED.search(plain)
+    if labeled:
+        return labeled.group(1)
+    parsed = parse_activation_input(plain)
+    if parsed.code and parsed.code.isdigit() and len(parsed.code) == 6:
+        return parsed.code
+    six = _SIX_DIGIT.search(plain)
+    return six.group(1) if six else None
+
+
+def event_mail_text(data: dict[str, Any] | None) -> str:
+    """Body text from a Home Assistant imap_content event."""
+    if not data:
+        return ""
+    text = data.get("text") or data.get("body") or ""
+    if isinstance(text, dict):
+        return " ".join(str(value) for value in text.values() if value)
+    return str(text)

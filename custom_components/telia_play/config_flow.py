@@ -19,13 +19,21 @@ from .const import (
     CONF_BOOT_ID,
     CONF_COUNTRY,
     CONF_DEVICE_ID,
+    CONF_IMAP_HOST,
+    CONF_IMAP_PASSWORD,
+    CONF_IMAP_PORT,
+    CONF_IMAP_USERNAME,
     CONF_INCLUDE_CHANNELS,
     CONF_PASSWORD,
     CONF_USERNAME,
     COUNTRIES,
     DEFAULT_COUNTRY,
+    DEFAULT_IMAP_FOLDER,
+    DEFAULT_IMAP_HOST,
+    DEFAULT_IMAP_PORT,
     DOMAIN,
 )
+from .mail import MailError, probe_imap
 from .models import normalize_username
 
 COUNTRY_OPTIONS = [
@@ -342,19 +350,85 @@ class TeliaPlayConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class TeliaPlayOptionsFlow(OptionsFlow):
-    """Toggle whether channel packages are exposed as switches."""
+    """Channel switches and the mailbox that receives Max one-time codes."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        options = self.config_entry.options
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            username = str(user_input.get(CONF_IMAP_USERNAME) or "").strip()
+            password = str(user_input.get(CONF_IMAP_PASSWORD) or "").strip()
+            if not password:
+                password = str(options.get(CONF_IMAP_PASSWORD) or "")
+            host = str(user_input.get(CONF_IMAP_HOST) or DEFAULT_IMAP_HOST).strip()
+            port = int(user_input.get(CONF_IMAP_PORT) or DEFAULT_IMAP_PORT)
+            include_channels = bool(user_input.get(CONF_INCLUDE_CHANNELS))
+            if username and not password:
+                errors[CONF_IMAP_PASSWORD] = "imap_password_required"
+            elif username and password:
+                try:
+                    await self.hass.async_add_executor_job(
+                        probe_imap,
+                        host,
+                        port,
+                        username,
+                        password,
+                        DEFAULT_IMAP_FOLDER,
+                    )
+                except MailError:
+                    errors["base"] = "imap_failed"
+            if not errors:
+                if not username:
+                    password = ""
+                    host = DEFAULT_IMAP_HOST
+                    port = DEFAULT_IMAP_PORT
+                return self.async_create_entry(
+                    title="",
+                    data={
+                        CONF_INCLUDE_CHANNELS: include_channels,
+                        CONF_IMAP_HOST: host,
+                        CONF_IMAP_PORT: port,
+                        CONF_IMAP_USERNAME: username,
+                        CONF_IMAP_PASSWORD: password,
+                    },
+                )
         schema = vol.Schema(
             {
                 vol.Optional(
                     CONF_INCLUDE_CHANNELS,
-                    default=self.config_entry.options.get(CONF_INCLUDE_CHANNELS, False),
+                    default=options.get(CONF_INCLUDE_CHANNELS, False),
                 ): selector.BooleanSelector(),
+                vol.Optional(
+                    CONF_IMAP_HOST,
+                    default=options.get(CONF_IMAP_HOST, DEFAULT_IMAP_HOST),
+                ): selector.TextSelector(),
+                vol.Optional(
+                    CONF_IMAP_PORT,
+                    default=int(options.get(CONF_IMAP_PORT, DEFAULT_IMAP_PORT)),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=1,
+                        max=65535,
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Optional(
+                    CONF_IMAP_USERNAME,
+                    default=options.get(CONF_IMAP_USERNAME, ""),
+                ): selector.TextSelector(
+                    selector.TextSelectorConfig(autocomplete="username")
+                ),
+                vol.Optional(CONF_IMAP_PASSWORD, default=""): selector.TextSelector(
+                    selector.TextSelectorConfig(
+                        type=selector.TextSelectorType.PASSWORD
+                    )
+                ),
             }
         )
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(
+            step_id="init",
+            data_schema=schema,
+            errors=errors,
+        )

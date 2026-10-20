@@ -41,10 +41,23 @@
     "step": {
       "init": {
         "title": "Telia Play options",
+        "description": "Optional mailbox: Home Assistant reads Max one-time codes from an inbox you own (not a shared mailbox). Use the same address you type on the Max page, or forward Max mail there. Gmail needs an app password. Home Assistant's IMAP integration is also used automatically.",
         "data": {
-          "include_channels": "Also create switches for channel packages"
+          "include_channels": "Also create switches for channel packages",
+          "imap_host": "Mailbox IMAP server",
+          "imap_port": "IMAP port",
+          "imap_username": "Mailbox email",
+          "imap_password": "Mailbox password (Gmail app password)"
+        },
+        "data_description": {
+          "imap_username": "Leave blank to disable mailbox polling. Existing Home Assistant IMAP events still work.",
+          "imap_password": "Leave blank to keep the password already stored."
         }
       }
+    },
+    "error": {
+      "imap_failed": "Could not sign in to that mailbox. For Gmail, use an app password and enable IMAP.",
+      "imap_password_required": "Enter the mailbox password (or a Gmail app password)."
     }
   },
   "entity": {
