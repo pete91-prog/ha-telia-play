@@ -50,6 +50,11 @@ parse_activation_input = activation.parse_activation_input
 partner_hint = activation.partner_hint
 partner_kind = activation.partner_kind
 apply_partner_status = activation.apply_partner_status
+remember_partner_url = activation.remember_partner_url
+next_activation_target = activation.next_activation_target
+extract_follow_urls = activation.extract_follow_urls
+max_partner_ids = activation.max_partner_ids
+ActivationResult = activation.ActivationResult
 with_partner_token = activation.with_partner_token
 with_query = activation.with_query
 wants_email = activation.wants_email
@@ -120,6 +125,11 @@ class FamilyMatchTests(unittest.TestCase):
 
     def test_hbo_max_is_max_not_hbo(self) -> None:
         item = _item("7198", "HBO Max standard")
+        family = match_family(item, self.families)
+        self.assertEqual(family.id, "7")
+
+    def test_hbo_tile_prefers_max_family(self) -> None:
+        item = _item("7198", "HBO")
         family = match_family(item, self.families)
         self.assertEqual(family.id, "7")
 
@@ -249,6 +259,37 @@ class ActivationHelperTests(unittest.TestCase):
             partner_kind(name="HBO Max standard", family_name="Max", family_id="7"),
             KIND_MAX,
         )
+        self.assertEqual(
+            partner_kind(name="HBO", family_name="HBO", family_id="20"),
+            KIND_MAX,
+        )
+
+    def test_keeps_sms_link_not_login_redirect(self) -> None:
+        sms = "https://www.max.com/no/activate/abc123"
+        login = "https://auth.max.com/login"
+        self.assertEqual(remember_partner_url(sms, login, None), sms)
+        previous = ActivationResult(
+            item_id="1",
+            name="HBO",
+            status=STATUS_NEEDS_CODE,
+            message="",
+            partner_url=sms,
+        )
+        self.assertEqual(
+            next_activation_target(
+                pasted_url=None, previous=previous, item_url="https://account.teliaplay.no/x"
+            ),
+            sms,
+        )
+
+    def test_extracts_max_link_from_html(self) -> None:
+        urls = extract_follow_urls(
+            '<a href="https://www.max.com/no/activate/abc">Aktiver</a>'
+        )
+        self.assertEqual(urls, ["https://www.max.com/no/activate/abc"])
+
+    def test_max_partner_ids_include_hbo(self) -> None:
+        self.assertEqual(max_partner_ids("20"), ["20", "7"])
 
     def test_prime_started_is_completed(self) -> None:
         self.assertEqual(

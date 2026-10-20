@@ -15,6 +15,7 @@ from .activation import (
     code_payloads,
     email_payloads,
     extract_activation_code,
+    extract_follow_urls,
     infer_status,
     is_telia_host,
     wants_email,
@@ -388,10 +389,21 @@ class TeliaPlayClient:
             _LOGGER.debug("Value-added services list unavailable: %s", err)
             return None
 
-    async def async_partner_token(self, partner_id: str) -> str | None:
+    async def async_partner_token(
+        self, partner_id: str, extra_ids: list[str] | None = None
+    ) -> str | None:
         """SSO token Telia issues for a streaming partner — no email wait."""
-        if not partner_id:
-            return None
+        ids: list[str] = []
+        for value in (partner_id, *(extra_ids or [])):
+            if value and value not in ids:
+                ids.append(value)
+        for pid in ids:
+            token = await self._async_partner_token_once(pid)
+            if token:
+                return token
+        return None
+
+    async def _async_partner_token_once(self, partner_id: str) -> str | None:
         await self.async_ensure_token()
         url = (
             f"{self._config['login_url']}/rest/secure/v1/partner/"
@@ -419,6 +431,7 @@ class TeliaPlayClient:
         partner_token: str | None = None,
         code: str | None = None,
         email: str | None = None,
+        force_email: bool = False,
     ) -> dict[str, Any]:
         """Open Telia's activation link or a Max SMS link, then submit an email code."""
         if not url:
@@ -431,16 +444,32 @@ class TeliaPlayClient:
         result = await self._fetch_url(target, partner_token=token)
         body = str(result.get("text") or "")
         final_url = str(result.get("url") or target)
-        if email and "@" in email and wants_email(body, final_url):
-            emailed = await self._post_payloads(final_url, email_payloads(email), partner_token=token)
+        json_payload = result.get("json")
+        for follow_url in _nested_urls(json_payload, body, final_url):
+            if follow_url == final_url:
+                continue
+            follow_token = partner_token if is_telia_host(follow_url) else None
+            follow = await self._fetch_url(follow_url, partner_token=follow_token)
+            body = str(follow.get("text") or body)
+            result = follow
+            final_url = str(result.get("url") or follow_url)
+            json_payload = follow.get("json") or json_payload
+        if email and "@" in email and (force_email or wants_email(body, final_url)):
+            emailed = await self._post_payloads(
+                final_url, email_payloads(email), partner_token=token if is_telia_host(final_url) else None
+            )
             if emailed is not None:
                 result = emailed
                 body = str(result.get("text") or body)
                 final_url = str(result.get("url") or final_url)
         if code:
-            posted = await self._post_code(final_url, code, partner_token=token)
-            if posted is None and final_url != url:
-                posted = await self._post_code(url, code, partner_token=token)
+            posted = await self._post_code(
+                final_url, code, partner_token=token if is_telia_host(final_url) else None
+            )
+            if posted is None and url != final_url:
+                posted = await self._post_code(
+                    url, code, partner_token=token if is_telia_host(url) else None
+                )
             if posted is not None:
                 result = posted
                 body = str(result.get("text") or body)
@@ -451,31 +480,13 @@ class TeliaPlayClient:
             body=body,
             http_status=result.get("status"),
         )
-        json_payload = result.get("json")
-        if isinstance(json_payload, dict):
-            nested = (
-                json_payload.get("activationUrl")
-                or json_payload.get("url")
-                or json_payload.get("redirectUrl")
-            )
-            if nested and not pairing:
-                follow = await self._fetch_url(str(nested), partner_token=token)
-                body = str(follow.get("text") or body)
-                pairing = extract_activation_code(body) or pairing
-                result = follow
-                final_url = str(result.get("url") or final_url)
-                status = infer_status(
-                    final_url=final_url,
-                    body=body,
-                    http_status=result.get("status"),
-                )
         if pairing and status == "started":
             status = "code_ready"
         return {
             "status": status,
             "http_status": result.get("status"),
             "url": final_url or target,
-            "requested_url": target,
+            "requested_url": url,
             "pairing_code": pairing,
             "json": json_payload,
         }
@@ -586,6 +597,27 @@ class TeliaPlayClient:
         if last is None:
             raise TeliaApiError(f"No response from {url}")
         return last
+
+
+def _nested_urls(payload: Any, body: str, current: str) -> list[str]:
+    found: list[str] = []
+    if isinstance(payload, dict):
+        for key in (
+            "activationUrl",
+            "url",
+            "redirectUrl",
+            "redirect_uri",
+            "continueUrl",
+            "targetUrl",
+            "deeplink",
+        ):
+            value = payload.get(key)
+            if isinstance(value, str) and value.startswith("http") and value not in found:
+                found.append(value)
+    for url in extract_follow_urls(body, current):
+        if url not in found and url != current:
+            found.append(url)
+    return found[:4]
 
 
 def _login_attempts(config: dict[str, Any]) -> list[tuple[str, str, str]]:

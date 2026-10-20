@@ -102,6 +102,7 @@ class TeliaPlayServiceSwitch(CoordinatorEntity[TeliaPlayCoordinator], SwitchEnti
             "activation_status": None if result is None else result.status,
             "activation_message": None if result is None else result.message,
             "pairing_code": None if result is None else result.pairing_code,
+            "partner_url": None if result is None else result.partner_url,
             "family": item.family_name,
             "vas_hub_provisioning": item.vas_hub_provisioning,
             "included_in_package": item.has_premium_access,

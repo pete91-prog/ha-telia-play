@@ -84,6 +84,9 @@ MAX_HOST_SUFFIXES = (
     "hbo.com",
     "play.max.com",
 )
+MAX_FAMILY_IDS = ("7", "20")
+_FOLLOW_URL = re.compile(r"https://[^\s\"'<>\\]+", re.I)
+_ACTIVATION_KEYS = ("activate", "token=", "partner", "register", "provision", "connect")
 
 
 @dataclass(slots=True)
@@ -98,6 +101,7 @@ class ActivationResult:
     pairing_code: str | None = None
     family_id: str | None = None
     final_url: str | None = None
+    partner_url: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -111,6 +115,7 @@ class ActivationResult:
             "status": self.status,
             "message": self.message,
             "activation_url": self.activation_url,
+            "partner_url": self.partner_url,
             "pairing_code": self.pairing_code,
             "family_id": self.family_id,
         }
@@ -176,7 +181,7 @@ def partner_kind(
     title = (name or "").lower()
     family = (family_name or "").lower()
     fid = str(family_id or "")
-    if fid == "7" or family == "max" or "hbo max" in title or title.strip() == "max":
+    if fid in MAX_FAMILY_IDS or family in {"max", "hbo"} or "hbo" in title or _has_max_word(title):
         return KIND_MAX
     if url and is_max_host(url):
         return KIND_MAX
@@ -185,6 +190,72 @@ def partner_kind(
     if fid == "6" or "netflix" in title or family == "netflix":
         return KIND_NETFLIX
     return partner_hint(url)
+
+
+def _has_max_word(value: str) -> bool:
+    return bool(re.search(r"\bmax\b", value or "", re.I))
+
+
+def is_activation_link(url: str | None) -> bool:
+    if not url:
+        return False
+    parsed = urlparse(url)
+    blob = f"{parsed.path} {parsed.query} {parsed.hostname or ''}".lower()
+    if "login" in parsed.path.lower() and "activate" not in blob:
+        return False
+    return any(key in blob for key in _ACTIVATION_KEYS) or is_max_host(url)
+
+
+def remember_partner_url(
+    original: str | None,
+    final: str | None = None,
+    previous: str | None = None,
+) -> str | None:
+    """Keep the Max SMS / Telia activate link, not the post-redirect login page."""
+    candidates = [original, previous, final]
+    for url in candidates:
+        if url and is_max_host(url) and is_activation_link(url):
+            return url
+    for url in candidates:
+        if url and is_activation_link(url):
+            return url
+    for url in candidates:
+        if url:
+            return url
+    return None
+
+
+def next_activation_target(
+    *,
+    pasted_url: str | None,
+    previous: ActivationResult | None,
+    item_url: str | None,
+) -> str | None:
+    prev_url = None
+    if previous is not None:
+        prev_url = previous.partner_url or previous.activation_url
+    return pasted_url or prev_url or item_url
+
+
+def extract_follow_urls(body: str | None, base: str | None = None) -> list[str]:
+    """Pull Max / activate links out of Telia HTML or JSON."""
+    found: list[str] = []
+    for match in _FOLLOW_URL.finditer(body or ""):
+        url = match.group(0).rstrip(").,]>\"'")
+        if not looks_like_url(url):
+            continue
+        if is_max_host(url) or is_activation_link(url) or is_telia_host(url):
+            if url not in found:
+                found.append(url)
+    return found
+
+
+def max_partner_ids(family_id: str | None) -> list[str]:
+    ids: list[str] = []
+    for value in (family_id, *MAX_FAMILY_IDS):
+        if value and value not in ids:
+            ids.append(value)
+    return ids
 
 
 def apply_partner_status(

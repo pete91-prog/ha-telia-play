@@ -9,5 +9,5 @@
   "issue_tracker": "https://github.com/pete91-prog/ha-telia-play/issues",
   "loggers": ["custom_components.telia_play"],
   "requirements": [],
-  "version": "1.1.4"
+  "version": "1.1.5"
 }

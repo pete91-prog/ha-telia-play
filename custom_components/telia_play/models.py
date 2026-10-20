@@ -338,11 +338,17 @@ def match_family(item: CatalogItem, families: list[StreamingFamily]) -> Streamin
         if item.id in family.store_ids:
             return family
     name = item.name.lower()
+    if "hbo" in name or name.strip() == "max":
+        for family in families:
+            if family.id == "7" or family.name.lower() == "max":
+                return family
     best: StreamingFamily | None = None
     best_score = 0
     for family in families:
         family_name = family.name.lower()
-        if family_name == "hbo" and "max" in name:
+        if family_name == "hbo" and any(
+            other.id == "7" or other.name.lower() == "max" for other in families
+        ):
             continue
         if family_name in name or name in family_name:
             score = len(family_name)

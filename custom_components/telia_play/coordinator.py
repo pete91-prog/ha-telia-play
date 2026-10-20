@@ -21,9 +21,12 @@ from .activation import (
     STATUS_NEEDS_CODE,
     ActivationResult,
     apply_partner_status,
+    max_partner_ids,
+    next_activation_target,
     parse_activation_input,
     partner_hint,
     partner_kind,
+    remember_partner_url,
 )
 from .api import TeliaApiError, TeliaAuthError, TeliaPlayClient, TeliaPlayError
 from .const import (
@@ -210,10 +213,10 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
         pasted = parse_activation_input(value)
         item = self._resolve_activation_item(query, pasted.url)
         previous = self.activations.get(item.id)
-        target = (
-            pasted.url
-            or (previous.activation_url if previous else None)
-            or item.activation_url
+        target = next_activation_target(
+            pasted_url=pasted.url,
+            previous=previous,
+            item_url=item.activation_url,
         )
         result = await self._async_open(item, url=target, code=pasted.code)
         self.activations[item.id] = result
@@ -226,6 +229,19 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
     ) -> CatalogItem:
         hint = (query or "").strip() or partner_hint(url)
         pending = [item for item in self.menu.streaming_services if item.needs_activation]
+        if hint and hint.lower().replace(" ", "") in {"hbo", "hbomax", "max"}:
+            for item in pending + [
+                entry
+                for entry in self.menu.streaming_services
+                if entry.is_selected and entry not in pending
+            ]:
+                if partner_kind(
+                    name=item.name,
+                    family_name=item.family_name,
+                    family_id=item.family_id,
+                    url=item.activation_url,
+                ) == KIND_MAX:
+                    return item
         if hint:
             try:
                 return self.menu.find(hint)
@@ -268,23 +284,26 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
         if not activation_url:
             vas = await self.client.async_value_added_services()
             activation_url = vas_activation_url(vas, item)
-        partner_token = None
-        if item.partner_id:
-            partner_token = await self.client.async_partner_token(item.partner_id)
-
         kind = partner_kind(
             name=item.name,
             family_name=item.family_name,
             family_id=item.family_id,
             url=activation_url,
         )
+        partner_token = None
+        extra_ids = max_partner_ids(item.family_id) if kind == KIND_MAX else None
+        if item.partner_id or extra_ids:
+            partner_token = await self.client.async_partner_token(
+                item.partner_id or (extra_ids[0] if extra_ids else ""),
+                extra_ids=extra_ids,
+            )
         if not activation_url:
             status = STATUS_NEEDS_CODE if code is None else STATUS_FAILED
             if kind == KIND_MAX:
                 message = (
-                    "Max sent an SMS with a link, then an email with a one-time code. "
-                    "Paste the SMS link into the Activation code box, then paste the "
-                    "6-digit email code. You do not need to wait for Telia’s mail."
+                    "HBO / Max is not finished yet. Paste the SMS https link into the "
+                    "Activation code box first, then paste the 6-digit code from the "
+                    "Max email."
                 )
             elif kind == KIND_PRIME:
                 status = STATUS_COMPLETED
@@ -307,12 +326,14 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
             )
 
         email = self.client.username if "@" in (self.client.username or "") else None
+        previous = self.activations.get(item.id)
         try:
             opened = await self.client.async_open_activation_url(
                 activation_url,
                 partner_token=partner_token,
                 code=code,
                 email=email,
+                force_email=kind == KIND_MAX,
             )
         except TeliaApiError as err:
             return ActivationResult(
@@ -330,7 +351,12 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
             http_status=opened.get("http_status"),
         )
         pairing = opened.get("pairing_code")
-        opened_url = opened.get("url") or activation_url
+        partner_url = remember_partner_url(
+            opened.get("requested_url") or activation_url,
+            opened.get("url"),
+            previous.partner_url if previous else None,
+        )
+        opened_url = partner_url or opened.get("url") or activation_url
         if status == STATUS_COMPLETED:
             if kind == KIND_PRIME:
                 message = (
@@ -354,9 +380,9 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
             message = f"Could not open the {item.name} activation link."
         elif status == STATUS_NEEDS_CODE:
             message = (
-                "Max sent an SMS with a link, then an email with a one-time code. "
-                "Paste the SMS link into the Activation code box (or "
-                "telia_play.submit_activation_code), then paste the 6-digit email code."
+                "HBO / Max is not finished yet. Paste the SMS https link into the "
+                "Activation code box first (do not only open it on the phone), then "
+                "paste the 6-digit code from the Max email."
                 if kind == KIND_MAX
                 else (
                     f"{item.name} still wants a partner code. Open the activation link "
@@ -379,6 +405,7 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
             pairing_code=pairing if isinstance(pairing, str) else None,
             family_id=item.family_id,
             final_url=opened.get("url"),
+            partner_url=partner_url,
             extra={"http_status": opened.get("http_status")},
         )
 
