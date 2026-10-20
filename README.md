@@ -38,7 +38,7 @@ A persistent notification is created per service, with a one-tap activation link
 How partners usually finish:
 
 - **Prime** — Telia’s activation link is enough. No SMS or email code.
-- **HBO / Max** — still needs Max’s own step. Paste the **SMS https link** into the Activation code box first (do not only open it on the phone), then paste the **6-digit code from the Max email**. The integration keeps that SMS link so the code is sent to Max, not to a leftover login page.
+- **HBO / Max** — the SMS goes to `activate.teliacompany.com/startactivation/…/max/…`. Paste that link if it is unused. If it is **already opened on the phone**, that UUID is spent: finish Max on that phone (the email code only works there), or press **Activate HBO/Max** so Telia can issue a new link.
 - **Netflix** (and similar) — may still ask you to sign in to *their* account in the browser. That login belongs to them; this only skips Telia’s “wait for the email” step.
 
 ## Install with HACS

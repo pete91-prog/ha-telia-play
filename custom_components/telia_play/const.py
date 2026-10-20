@@ -67,6 +67,7 @@ TELIA_AUTH_HOST_SUFFIXES: Final = (
     "telia.dk",
     "telia.net",
     "telia.com",
+    "teliacompany.com",
     "live.tv.telia.net",
     "t6a.net",
 )

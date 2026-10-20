@@ -157,7 +157,13 @@ def partner_hint(url: str | None) -> str | None:
     host = (urlparse(url).hostname or "").lower()
     path = (urlparse(url).path or "").lower()
     blob = f"{host} {path}"
-    if is_max_host(url) or "hbo" in blob:
+    if (
+        is_max_host(url)
+        or "hbo" in blob
+        or "/max/" in path
+        or path.rstrip("/").endswith("/max")
+        or "startactivation" in path
+    ):
         return KIND_MAX
     if "netflix" in blob:
         return KIND_NETFLIX
@@ -268,6 +274,38 @@ def apply_partner_status(
     if kind == KIND_MAX and status == STATUS_STARTED:
         return STATUS_NEEDS_CODE
     return status
+
+
+_SPENT_HINTS = (
+    "error_servicenotfound",
+    "error_servicetypenotintelia",
+    "error_already",
+    "error_expired",
+    "error_used",
+    "already used",
+    "already-used",
+    "link has expired",
+    "no longer valid",
+    "ikke ut til at du har denne tjenesten",
+    "lenken er brukt",
+    "lenken er utløpt",
+    "tjenesten er allerede aktivert",
+)
+
+
+def is_spent_activation(final_url: str | None, body: str | None = None) -> bool:
+    """True when a Telia startactivation SMS link has already been consumed."""
+    blob = f"{final_url or ''} {body or ''}".lower()
+    return any(hint in blob for hint in _SPENT_HINTS)
+
+
+def activation_token(url: str | None) -> str | None:
+    if not url:
+        return None
+    path = urlparse(url).path.rstrip("/")
+    if not path:
+        return None
+    return path.rsplit("/", 1)[-1] or None
 
 
 def wants_email(body: str | None, final_url: str | None = None) -> bool:

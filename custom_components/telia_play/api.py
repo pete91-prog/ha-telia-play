@@ -17,6 +17,7 @@ from .activation import (
     extract_activation_code,
     extract_follow_urls,
     infer_status,
+    is_spent_activation,
     is_telia_host,
     wants_email,
     with_partner_token,
@@ -482,12 +483,16 @@ class TeliaPlayClient:
         )
         if pairing and status == "started":
             status = "code_ready"
+        spent = is_spent_activation(final_url, body)
+        if spent and status == "started":
+            status = "needs_code"
         return {
             "status": status,
             "http_status": result.get("status"),
             "url": final_url or target,
             "requested_url": url,
             "pairing_code": pairing,
+            "spent": spent,
             "json": json_payload,
         }
 

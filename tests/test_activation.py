@@ -44,7 +44,9 @@ vas_activation_url = models.vas_activation_url
 extract_activation_code = activation.extract_activation_code
 infer_status = activation.infer_status
 is_max_host = activation.is_max_host
+is_spent_activation = activation.is_spent_activation
 is_telia_host = activation.is_telia_host
+activation_token = activation.activation_token
 looks_like_url = activation.looks_like_url
 parse_activation_input = activation.parse_activation_input
 partner_hint = activation.partner_hint
@@ -190,7 +192,31 @@ class ActivationHelperTests(unittest.TestCase):
 
     def test_telia_host(self) -> None:
         self.assertTrue(is_telia_host("https://account.teliaplay.no/activate"))
+        self.assertTrue(
+            is_telia_host(
+                "https://activate.teliacompany.com/startactivation/no/max/example-id"
+            )
+        )
         self.assertFalse(is_telia_host("https://www.netflix.com/tv"))
+
+    def test_startactivation_is_max(self) -> None:
+        url = "https://activate.teliacompany.com/startactivation/no/max/example-id"
+        self.assertEqual(partner_hint(url), KIND_MAX)
+        self.assertEqual(activation_token(url), "example-id")
+
+    def test_spent_startactivation_error_page(self) -> None:
+        self.assertTrue(
+            is_spent_activation(
+                "https://activate.teliacompany.com/error/p/startactivation/no/error_servicenotfound.html",
+                "Det ser ikke ut til at du har denne tjenesten.",
+            )
+        )
+        self.assertFalse(
+            is_spent_activation(
+                "https://activate.teliacompany.com/startactivation/no/max/example-id",
+                "Enter your email address",
+            )
+        )
 
     def test_infer_code_ready(self) -> None:
         status = infer_status(

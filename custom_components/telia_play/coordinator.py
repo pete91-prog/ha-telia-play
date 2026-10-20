@@ -20,6 +20,7 @@ from .activation import (
     STATUS_FAILED,
     STATUS_NEEDS_CODE,
     ActivationResult,
+    activation_token,
     apply_partner_status,
     max_partner_ids,
     next_activation_target,
@@ -218,7 +219,7 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
             previous=previous,
             item_url=item.activation_url,
         )
-        result = await self._async_open(item, url=target, code=pasted.code)
+        result = await self._async_open(item, url=target, code=pasted.code, refresh_spent=True)
         self.activations[item.id] = result
         self._notify_activation(result)
         await self._async_refresh_menu_quiet()
@@ -262,7 +263,9 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
     async def async_activate_item(
         self, item: CatalogItem, *, notify: bool = True
     ) -> ActivationResult:
-        result = await self._async_open(item, url=item.activation_url, code=None)
+        result = await self._async_open(
+            item, url=item.activation_url, code=None, refresh_spent=True
+        )
         self.activations[item.id] = result
         if notify:
             self._notify_activation(result)
@@ -278,7 +281,12 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
                     _LOGGER.warning("Could not start activation for %s: %s", item.name, err)
 
     async def _async_open(
-        self, item: CatalogItem, *, url: str | None, code: str | None
+        self,
+        item: CatalogItem,
+        *,
+        url: str | None,
+        code: str | None,
+        refresh_spent: bool = False,
     ) -> ActivationResult:
         activation_url = url
         if not activation_url:
@@ -301,9 +309,9 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
             status = STATUS_NEEDS_CODE if code is None else STATUS_FAILED
             if kind == KIND_MAX:
                 message = (
-                    "HBO / Max is not finished yet. Paste the SMS https link into the "
-                    "Activation code box first, then paste the 6-digit code from the "
-                    "Max email."
+                    "HBO / Max is not finished yet. Paste the SMS link from "
+                    "activate.teliacompany.com, or press Activate to ask Telia for a new "
+                    "one if that link was already used."
                 )
             elif kind == KIND_PRIME:
                 status = STATUS_COMPLETED
@@ -345,6 +353,15 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
                 family_id=item.family_id,
             )
 
+        if opened.get("spent") and refresh_spent and kind == KIND_MAX:
+            fresh = await self._async_fresh_max_url(
+                item, opened.get("requested_url") or activation_url
+            )
+            if fresh:
+                return await self._async_open(
+                    item, url=fresh, code=code, refresh_spent=False
+                )
+
         status = apply_partner_status(
             str(opened.get("status") or STATUS_STARTED),
             kind=kind,
@@ -379,17 +396,25 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
         elif status == STATUS_FAILED:
             message = f"Could not open the {item.name} activation link."
         elif status == STATUS_NEEDS_CODE:
-            message = (
-                "HBO / Max is not finished yet. Paste the SMS https link into the "
-                "Activation code box first (do not only open it on the phone), then "
-                "paste the 6-digit code from the Max email."
-                if kind == KIND_MAX
-                else (
+            if kind == KIND_MAX and opened.get("spent"):
+                message = (
+                    "That Telia Max SMS link is already used. The email code from that "
+                    "open only works on the phone where you opened it. Press Activate "
+                    "HBO/Max to ask Telia for a new link, or finish Max on that phone."
+                )
+            elif kind == KIND_MAX:
+                message = (
+                    "HBO / Max is not finished yet. Paste the SMS https link from "
+                    "activate.teliacompany.com into the Activation code box, then the "
+                    "6-digit Max email code. If the link was already opened on the phone, "
+                    "finish it there or press Activate to get a new Telia link."
+                )
+            else:
+                message = (
                     f"{item.name} still wants a partner code. Open the activation link "
                     "from this notification. If a code arrives by SMS or email, paste it "
                     "with telia_play.submit_activation_code."
                 )
-            )
         else:
             message = (
                 f"Opened the {item.name} activation link from Telia’s API instead of "
@@ -406,8 +431,46 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
             family_id=item.family_id,
             final_url=opened.get("url"),
             partner_url=partner_url,
-            extra={"http_status": opened.get("http_status")},
+            extra={
+                "http_status": opened.get("http_status"),
+                "spent": bool(opened.get("spent")),
+            },
         )
+
+    async def _async_fresh_max_url(self, item: CatalogItem, used_url: str | None) -> str | None:
+        """Ask Telia for a new startactivation link after the SMS UUID is spent."""
+        used_token = activation_token(used_url)
+        await self._async_refresh_menu_quiet()
+        current = next(
+            (entry for entry in self.menu.streaming_services if entry.id == item.id),
+            None,
+        )
+        if current is None:
+            try:
+                current = self.menu.find(item.name)
+            except UnknownServiceError:
+                current = item
+        fresh = current.activation_url
+        if fresh and activation_token(fresh) != used_token:
+            item.activation_url = fresh
+            return fresh
+        try:
+            menu = await self.client.async_save_selection(self.menu.selected_ids)
+            families = await self.client.async_streaming_families()
+            menu = enrich_menu(menu, families)
+            self.async_set_updated_data(menu)
+        except TeliaPlayError as err:
+            _LOGGER.debug("Could not refresh Max activation URL: %s", err)
+            return None
+        current = next(
+            (entry for entry in menu.streaming_services if entry.id == item.id),
+            current,
+        )
+        fresh = current.activation_url if current else None
+        if fresh and activation_token(fresh) != used_token:
+            item.activation_url = fresh
+            return fresh
+        return None
 
     async def _async_refresh_menu_quiet(self) -> None:
         try:
