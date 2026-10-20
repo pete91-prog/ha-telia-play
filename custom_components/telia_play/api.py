@@ -20,6 +20,7 @@ from .activation import (
     with_query,
 )
 from .const import (
+    AUTH_PENDING_CODE,
     CLIENT_NAME,
     CLIENT_VERSION,
     COUNTRIES,
@@ -28,7 +29,13 @@ from .const import (
     USER_AGENT,
     WHITE_LABEL,
 )
-from .models import SelectionMenu, StreamingFamily, families_from_api, menu_from_api
+from .models import (
+    SelectionMenu,
+    StreamingFamily,
+    families_from_api,
+    menu_from_api,
+    normalize_username,
+)
 
 _LOGGER = logging.getLogger(__name__)
 _TIMEOUT = ClientTimeout(total=30)
@@ -66,7 +73,7 @@ class TeliaPlayClient:
         self._session = session
         self.country = country
         self._config = COUNTRIES[country]
-        self._username = username
+        self._username = normalize_username(username)
         self._password = password
         self.device_id = device_id or str(uuid.uuid4())
         self.boot_id = boot_id or str(uuid.uuid4())
@@ -84,7 +91,8 @@ class TeliaPlayClient:
             "valid_to": self.valid_to or "",
         }
 
-    def _headers(self, *, authorized: bool = False) -> dict[str, str]:
+    def _headers(self, *, authorized: bool = False, login: bool = False) -> dict[str, str]:
+        origin = self._config["login_origin"] if login else self._config["account_url"]
         headers = {
             "accept": "application/json",
             "content-type": "application/json",
@@ -93,8 +101,8 @@ class TeliaPlayClient:
             "tv-client-name": CLIENT_NAME,
             "tv-client-boot-id": self.boot_id,
             "tv-client-version": CLIENT_VERSION,
-            "origin": self._config["account_url"],
-            "referer": self._config["account_url"] + "/",
+            "origin": origin,
+            "referer": origin + "/",
         }
         if authorized and self.access_token:
             headers["authorization"] = f"Bearer {self.access_token}"
@@ -113,7 +121,9 @@ class TeliaPlayClient:
                 method,
                 url,
                 json=json_body,
-                headers=self._headers(authorized=authorized),
+                headers=self._headers(
+                    authorized=authorized, login="/logingateway" in url
+                ),
                 timeout=_TIMEOUT,
             ) as response:
                 if response.content_type and "json" in response.content_type:
@@ -157,13 +167,81 @@ class TeliaPlayClient:
             url,
             json_body={
                 "deviceId": self.device_id,
-                "username": self._username.lower(),
+                "username": self._username,
                 "password": self._password,
                 "deviceType": "WEB",
                 "whiteLabelBrand": WHITE_LABEL,
             },
         )
         self._store_tokens(payload)
+
+    async def async_start_device_login(self) -> dict[str, Any]:
+        """Start the official TV-code pairing flow (BankID / Google on the phone)."""
+        url = (
+            f"{self._config['login_url']}/rest/v1/device/authorization"
+            f"?deviceId={self.device_id}&deviceType=WEB&whiteLabelBrand={WHITE_LABEL}"
+        )
+        payload = await self._request("GET", url)
+        if not isinstance(payload, dict) or not payload.get("deviceCode"):
+            raise TeliaApiError("Telia did not return a TV pairing code")
+        return {
+            "device_code": str(payload["deviceCode"]),
+            "user_code": str(payload.get("userCode") or ""),
+            "verification_uri": str(
+                payload.get("verificationUriComplete")
+                or payload.get("verificationUri")
+                or self._config["login_origin"]
+            ),
+            "interval": int(payload.get("interval") or 5),
+            "expires_in": int(payload.get("expiresIn") or 7200),
+        }
+
+    async def async_poll_device_login(self, device_code: str) -> dict[str, Any] | None:
+        """Return tokens when the user has approved the TV code, else None if still waiting."""
+        url = f"{self._config['login_url']}/rest/v1/device/token"
+        headers = self._headers(login=True)
+        headers["content-type"] = "application/x-www-form-urlencoded"
+        try:
+            async with self._session.request(
+                "POST",
+                url,
+                data={"deviceCode": device_code},
+                headers=headers,
+                timeout=_TIMEOUT,
+            ) as response:
+                if response.content_type and "json" in response.content_type:
+                    payload = await response.json(content_type=None)
+                else:
+                    text = await response.text()
+                    payload = {"raw": text, "status": response.status}
+                if response.status in (200, 201) and isinstance(payload, dict):
+                    self._store_tokens(payload)
+                    return payload
+                if _is_auth_pending(payload, response.status):
+                    return None
+                if response.status in (401, 403):
+                    raise TeliaAuthError(_error_message(payload) or f"HTTP {response.status}")
+                raise TeliaApiError(_error_message(payload) or f"HTTP {response.status}")
+        except ClientError as err:
+            raise TeliaApiError(str(err)) from err
+
+    async def async_account_username(self) -> str | None:
+        await self.async_ensure_token()
+        try:
+            payload = await self._request(
+                "GET",
+                f"{ENGAGEMENT_GATEWAY}/rest/secure/v2/account/info",
+                authorized=True,
+            )
+        except TeliaPlayError:
+            return None
+        if not isinstance(payload, dict):
+            return None
+        for key in ("displayUsername", "username", "email", "msisdn", "phoneNumber"):
+            value = payload.get(key)
+            if value:
+                return str(value)
+        return None
 
     async def async_refresh(self) -> None:
         if not self.refresh_token:
@@ -408,6 +486,14 @@ class TeliaPlayClient:
         if last is None:
             raise TeliaApiError(f"No response from {url}")
         return last
+
+
+def _is_auth_pending(payload: Any, status: int) -> bool:
+    if not isinstance(payload, dict):
+        return status in (400, 428)
+    code = str(payload.get("errorCode") or "")
+    message = str(payload.get("errorMessage") or payload.get("message") or "").lower()
+    return code == AUTH_PENDING_CODE or "pending" in message or "authorization pending" in message
 
 
 def _error_message(payload: Any) -> str | None:

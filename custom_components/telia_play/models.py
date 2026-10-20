@@ -227,6 +227,26 @@ def menu_from_api(raw: dict[str, Any]) -> SelectionMenu:
     )
 
 
+def normalize_username(value: str) -> str:
+    """Telia Play Norway uses the TV subscription mobile number, not Gmail."""
+    raw = (value or "").strip()
+    if not raw:
+        return raw
+    compact = raw.replace(" ", "").replace("-", "")
+    digits = "".join(ch for ch in compact if ch.isdigit())
+    if compact.startswith("+47") and len(digits) == 10:
+        return "+47" + digits[2:]
+    if digits.startswith("0047") and len(digits) == 12:
+        return "+47" + digits[4:]
+    if compact.startswith("47") and len(digits) == 10:
+        return "+47" + digits[2:]
+    if compact.isdigit() and len(digits) == 8:
+        return digits
+    if "@" in raw:
+        return raw.lower()
+    return raw.lower()
+
+
 def _logo(logos: dict[str, Any]) -> str | None:
     for theme in ("dark", "light"):
         node = logos.get(theme) or {}

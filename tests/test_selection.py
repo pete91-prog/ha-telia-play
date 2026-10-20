@@ -22,6 +22,7 @@ ids_after_toggle = _MODELS_MOD.ids_after_toggle
 ids_for_streaming_names = _MODELS_MOD.ids_for_streaming_names
 match_item = _MODELS_MOD.match_item
 menu_from_api = _MODELS_MOD.menu_from_api
+normalize_username = _MODELS_MOD.normalize_username
 
 
 def _item(
@@ -103,6 +104,19 @@ class ToggleTests(unittest.TestCase):
         menu = _menu(_item("1", "Netflix", 50), total=60)
         with self.assertRaises(UnknownServiceError):
             menu.find("Disney+")
+
+
+class UsernameTests(unittest.TestCase):
+    def test_gmail_lowercased(self) -> None:
+        self.assertEqual(
+            normalize_username("User@Gmail.com"),
+            "user@gmail.com",
+        )
+
+    def test_norwegian_mobile(self) -> None:
+        self.assertEqual(normalize_username("999 99 999"), "99999999")
+        self.assertEqual(normalize_username("+47 999 99 999"), "+4799999999")
+        self.assertEqual(normalize_username("004799999999"), "+4799999999")
 
 
 class ParseTests(unittest.TestCase):

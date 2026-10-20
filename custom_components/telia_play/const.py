@@ -11,6 +11,9 @@ CONF_COUNTRY: Final = "country"
 CONF_USERNAME: Final = "username"
 CONF_PASSWORD: Final = "password"
 CONF_INCLUDE_CHANNELS: Final = "include_channels"
+CONF_LOGIN_METHOD: Final = "login_method"
+LOGIN_PASSWORD: Final = "password"
+LOGIN_TV_CODE: Final = "tv_code"
 
 CONF_DEVICE_ID: Final = "device_id"
 CONF_BOOT_ID: Final = "boot_id"
@@ -33,7 +36,11 @@ ATTR_CODE: Final = "code"
 
 NOTIFICATION_ID_PREFIX: Final = "telia_play_activate"
 
-USER_AGENT: Final = "HomeAssistant-TeliaPlay/1.0"
+USER_AGENT: Final = (
+    "Mozilla/5.0 (Linux; Home Assistant) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36 TeliaPlay/1.1"
+)
+AUTH_PENDING_CODE: Final = "50015"
 CLIENT_NAME: Final = "accountweb"
 CLIENT_VERSION: Final = "1.24.1"
 WHITE_LABEL: Final = "TELIA"

@@ -61,9 +61,11 @@ Copy `custom_components/telia_play` into `config/custom_components/`, then resta
 ### Configure
 
 1. Settings → Devices & services → Add integration → **Telia Play**.
-2. Country **Norway**, then the Telia Play username and password.
+2. Country **Norway**.
+3. Prefer **TV code** if you sign in with BankID or Google on teliaplay.no. Open the link, enter the 6-digit code, approve on the phone.
+4. Or use the **mobile number** the TV subscription is registered on, plus the Telia Play password (not Gmail / not your Google password).
 
-The first login on Telia Play Norway may need BankID on [teliaplay.no](https://www.teliaplay.no/). After that, the same password works here.
+The first Telia Play Norway login on a new device may need BankID on [teliaplay.no](https://www.teliaplay.no/).
 
 Optional: enable **Also create switches for channel packages** if you also want to spend points on TV channels, not only streaming services.
 
