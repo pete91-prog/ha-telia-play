@@ -22,19 +22,23 @@ from .activation import (
 from .const import (
     AUTH_PENDING_CODE,
     CLIENT_NAME,
+    CLIENT_NAME_WEB,
     CLIENT_VERSION,
     COUNTRIES,
     ENGAGEMENT_GATEWAY,
     PURCHASE_GATEWAY,
+    SHARED_LOGIN_URL,
     USER_AGENT,
     WHITE_LABEL,
 )
 from .models import (
     SelectionMenu,
     StreamingFamily,
+    extract_oauth_code,
     families_from_api,
     menu_from_api,
     normalize_username,
+    username_candidates,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -73,14 +77,20 @@ class TeliaPlayClient:
         self._session = session
         self.country = country
         self._config = COUNTRIES[country]
-        self._username = normalize_username(username)
+        self._username_raw = (username or "").strip()
+        self._username = normalize_username(self._username_raw)
         self._password = password
+        self._client_name = CLIENT_NAME
         self.device_id = device_id or str(uuid.uuid4())
         self.boot_id = boot_id or str(uuid.uuid4())
         self.access_token = access_token
         self.refresh_token = refresh_token
         self.valid_to = valid_to
         self._families: list[StreamingFamily] | None = None
+
+    @property
+    def username(self) -> str:
+        return self._username
 
     def token_payload(self) -> dict[str, str]:
         return {
@@ -98,7 +108,7 @@ class TeliaPlayClient:
             "content-type": "application/json",
             "user-agent": USER_AGENT,
             "x-country": self._config["code"],
-            "tv-client-name": CLIENT_NAME,
+            "tv-client-name": self._client_name,
             "tv-client-boot-id": self.boot_id,
             "tv-client-version": CLIENT_VERSION,
             "origin": origin,
@@ -115,14 +125,18 @@ class TeliaPlayClient:
         *,
         authorized: bool = False,
         json_body: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+        login: bool | None = None,
     ) -> Any:
         try:
             async with self._session.request(
                 method,
                 url,
                 json=json_body,
+                params=params,
                 headers=self._headers(
-                    authorized=authorized, login="/logingateway" in url
+                    authorized=authorized,
+                    login=("/logingateway" in url) if login is None else login,
                 ),
                 timeout=_TIMEOUT,
             ) as response:
@@ -161,19 +175,71 @@ class TeliaPlayClient:
         self.valid_to = str(payload.get("validTo") or "")
 
     async def async_login(self) -> None:
-        url = f"{self._config['login_url']}/rest/v1/login"
+        """Sign in with the same email/mobile + password as teliaplay.no."""
+        last_error: TeliaPlayError | None = None
+        for username in username_candidates(self._username_raw or self._username):
+            for client_name, kind, gateway in _login_attempts(self._config):
+                self._client_name = client_name
+                try:
+                    if kind == "login":
+                        await self._login_direct(gateway, username)
+                    else:
+                        await self._login_oauth(gateway, username)
+                except TeliaAuthError as err:
+                    last_error = err
+                    _LOGGER.debug(
+                        "Telia %s as %s via %s (%s) failed: %s",
+                        kind,
+                        username,
+                        gateway,
+                        client_name,
+                        err,
+                    )
+                    continue
+                self._username = username
+                return
+        raise last_error or TeliaAuthError("Username/password was incorrect")
+
+    async def _login_direct(self, gateway: str, username: str) -> None:
         payload = await self._request(
             "POST",
-            url,
+            f"{gateway}/rest/v1/login",
             json_body={
                 "deviceId": self.device_id,
-                "username": self._username,
+                "username": username,
                 "password": self._password,
                 "deviceType": "WEB",
                 "whiteLabelBrand": WHITE_LABEL,
             },
         )
         self._store_tokens(payload)
+
+    async def _login_oauth(self, gateway: str, username: str) -> None:
+        play_url = str(self._config.get("play_url") or self._config["account_url"])
+        payload = await self._request(
+            "POST",
+            f"{gateway}/rest/v1/authenticate",
+            params={"redirectUri": play_url + "/"},
+            json_body={
+                "deviceId": self.device_id,
+                "deviceType": "WEB",
+                "password": self._password,
+                "username": username,
+                "whiteLabelBrand": WHITE_LABEL,
+            },
+        )
+        if isinstance(payload, dict) and payload.get("accessToken"):
+            self._store_tokens(payload)
+            return
+        code = extract_oauth_code(payload if isinstance(payload, dict) else {})
+        if not code:
+            raise TeliaAuthError("Telia authenticate did not return an access code")
+        tokens = await self._request(
+            "POST",
+            f"{gateway}/rest/v1/oauth/token",
+            params={"code": code},
+        )
+        self._store_tokens(tokens)
 
     async def async_start_device_login(self) -> dict[str, Any]:
         """Start the official TV-code pairing flow (BankID / Google on the phone)."""
@@ -486,6 +552,26 @@ class TeliaPlayClient:
         if last is None:
             raise TeliaApiError(f"No response from {url}")
         return last
+
+
+def _login_attempts(config: dict[str, Any]) -> list[tuple[str, str, str]]:
+    """Client name, login kind, and gateway to try — same paths as the website / Kodi."""
+    country = str(config["login_url"])
+    seen: set[tuple[str, str, str]] = set()
+    attempts: list[tuple[str, str, str]] = []
+    for client_name, kind, gateway in (
+        (CLIENT_NAME, "login", country),
+        (CLIENT_NAME_WEB, "login", country),
+        (CLIENT_NAME_WEB, "oauth", SHARED_LOGIN_URL),
+        (CLIENT_NAME, "oauth", country),
+        (CLIENT_NAME, "login", SHARED_LOGIN_URL),
+    ):
+        item = (client_name, kind, gateway)
+        if item in seen:
+            continue
+        seen.add(item)
+        attempts.append(item)
+    return attempts
 
 
 def _is_auth_pending(payload: Any, status: int) -> bool:

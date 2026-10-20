@@ -3,26 +3,23 @@
     "step": {
       "user": {
         "title": "Telia Play",
-        "description": "I Norge bruker du TV-poeng (Valgmenyen) til å velge strømmetjenester. Velg TV-kode hvis du logger inn med BankID eller Google på teliaplay.no.",
+        "description": "Bruk samme e-post (eller mobilnummer) og passord som på teliaplay.no. La begge stå tomme for å pare med TV-kode i stedet.",
         "data": {
           "country": "Land",
-          "login_method": "Slik logger du inn",
+          "username": "E-post eller mobilnummer",
+          "password": "Passord",
           "include_channels": "Lag også brytere for kanalpakker"
         }
       },
-      "password": {
-        "title": "Telia Play-passord",
-        "description": "Bruk mobilnummeret TV-abonnementet er registrert på (ikke Gmail). Passordet er det du satte i Telia Play, ikke Google-passordet.",
-        "data": {
-          "username": "Mobilnummer",
-          "password": "Telia Play-passord"
-        }
+      "password_fallback": {
+        "title": "Fortsett med TV-kode",
+        "description": "Telia godtok ikke {username} og det passordet ({error}). Hvis nettsiden logger deg inn med Google eller BankID, godkjenn en TV-kode på telefonen — du blir på din egen konto."
       },
       "reauth_confirm": {
         "title": "Logg inn på Telia Play på nytt",
         "data": {
-          "username": "Mobilnummer",
-          "password": "Telia Play-passord"
+          "username": "E-post eller mobilnummer",
+          "password": "Passord"
         }
       }
     },
@@ -30,8 +27,7 @@
       "wait_approve": "Kode: {code}\n\nÅpne {url} på telefonen mens du allerede er logget inn på Telia Play (BankID eller Google går fint). Dette bildet fortsetter når du godkjenner."
     },
     "error": {
-      "invalid_auth": "Innloggingen mislyktes ({error}). Bruk mobilnummeret på TV-abonnementet og Telia Play-passordet, eller velg TV-kode.",
-      "invalid_auth_email": "Telia Play i Norge bruker ikke Gmail som brukernavn. Bruk mobilnummeret på TV-abonnementet, eller velg TV-kode hvis du logger inn med Google/BankID.",
+      "invalid_auth": "Innloggingen mislyktes ({error}). Bruk samme e-post eller mobil og passord som i nettleseren, eller la feltene stå tomme og par med TV-kode.",
       "cannot_connect": "Fikk ikke kontakt med Telia Play.",
       "no_selection_menu": "Innloggingen gikk bra, men denne kontoen har ingen Valgmeny / TV-poeng. Det brukes på Telia Play i Norge.",
       "tv_code_expired": "TV-koden utløp eller ble ikke godkjent. Prøv igjen."

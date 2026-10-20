@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import unquote
+from urllib.parse import parse_qs, unquote, urlparse
 
 
 class NotEnoughPointsError(Exception):
@@ -228,7 +228,7 @@ def menu_from_api(raw: dict[str, Any]) -> SelectionMenu:
 
 
 def normalize_username(value: str) -> str:
-    """Telia Play Norway uses the TV subscription mobile number, not Gmail."""
+    """Keep email as typed (lowercased) and normalise Nordic mobile numbers."""
     raw = (value or "").strip()
     if not raw:
         return raw
@@ -245,6 +245,51 @@ def normalize_username(value: str) -> str:
     if "@" in raw:
         return raw.lower()
     return raw.lower()
+
+
+def username_candidates(value: str) -> list[str]:
+    """Usernames Telia may accept for the same browser account."""
+    raw = (value or "").strip()
+    candidates: list[str] = []
+
+    def add(item: str) -> None:
+        item = (item or "").strip()
+        if item and item not in candidates:
+            candidates.append(item)
+
+    if "@" in raw:
+        add(raw.lower())
+        add(raw)
+    else:
+        add(raw)
+        add(raw.lower())
+    normalised = normalize_username(raw)
+    add(normalised)
+    if normalised.isdigit() and len(normalised) == 8:
+        add("+47" + normalised)
+    if normalised.startswith("+47") and len(normalised) == 11:
+        add(normalised[3:])
+    return candidates
+
+
+def extract_oauth_code(payload: Any) -> str | None:
+    """Read the authorization code from /authenticate or a redirect URI."""
+    if not isinstance(payload, dict):
+        return None
+    for key in ("code", "authorizationCode", "authorizationGrant"):
+        value = payload.get(key)
+        if value:
+            return str(value)
+    redirect = payload.get("redirectUri") or payload.get("redirect_uri")
+    if not redirect:
+        return None
+    parsed = urlparse(str(redirect))
+    query = parse_qs(parsed.query)
+    for key in ("code", "authorizationCode"):
+        values = query.get(key)
+        if values and values[0]:
+            return str(values[0])
+    return None
 
 
 def _logo(logos: dict[str, Any]) -> str | None:

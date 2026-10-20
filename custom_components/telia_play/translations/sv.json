@@ -3,13 +3,65 @@
     "step": {
       "user": {
         "title": "Telia Play",
-        "description": "Logga in med Telia Play-kontot. TV-poäng (Valgmeny) för att välja streamingtjänster används i Norge.",
+        "description": "Använd samma e-post (eller mobilnummer) och lösenord som på teliaplay.se. Lämna båda tomma för att para med en TV-kod istället.",
         "data": {
           "country": "Land",
-          "username": "Användarnamn",
+          "username": "E-post eller mobilnummer",
           "password": "Lösenord",
           "include_channels": "Skapa även switchar för kanalpaket"
         }
+      },
+      "password_fallback": {
+        "title": "Fortsätt med TV-kod",
+        "description": "Telia godkände inte {username} och det lösenordet ({error}). Om webbplatsen loggar in dig med Google eller BankID, godkänn en TV-kod i telefonen — du stannar på ditt eget konto."
+      },
+      "reauth_confirm": {
+        "title": "Logga in på Telia Play igen",
+        "data": {
+          "username": "E-post eller mobilnummer",
+          "password": "Lösenord"
+        }
+      }
+    },
+    "progress": {
+      "wait_approve": "Kod: {code}\n\nÖppna {url} i telefonen medan du redan är inloggad på Telia Play (BankID eller Google går bra). Den här skärmen fortsätter när du godkänner."
+    },
+    "error": {
+      "invalid_auth": "Det gick inte att logga in ({error}). Använd samma e-post eller mobil och lösenord som i webbläsaren, eller lämna fälten tomma och para med en TV-kod.",
+      "cannot_connect": "Kunde inte nå Telia Play.",
+      "no_selection_menu": "Inloggningen lyckades, men det här kontot har ingen Valgmeny / TV-poäng. Det används på Telia Play i Norge.",
+      "tv_code_expired": "TV-koden gick ut eller godkändes inte. Försök igen."
+    },
+    "abort": {
+      "already_configured": "Det här Telia Play-kontot är redan konfigurerat.",
+      "reauth_successful": "Inloggad igen."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Telia Play-inställningar",
+        "data": {
+          "include_channels": "Skapa även switchar för kanalpaket"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "points_remaining": {
+        "name": "TV-poäng kvar"
+      },
+      "points_used": {
+        "name": "TV-poäng i bruk"
+      },
+      "points_total": {
+        "name": "TV-poäng inkluderade"
+      }
+    },
+    "button": {
+      "activate": {
+        "name": "Aktivera {name}"
       }
     }
   }

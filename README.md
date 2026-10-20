@@ -62,8 +62,8 @@ Copy `custom_components/telia_play` into `config/custom_components/`, then resta
 
 1. Settings → Devices & services → Add integration → **Telia Play**.
 2. Country **Norway**.
-3. Prefer **TV code** if you sign in with BankID or Google on teliaplay.no. Open the link, enter the 6-digit code, approve on the phone.
-4. Or use the **mobile number** the TV subscription is registered on, plus the Telia Play password (not Gmail / not your Google password).
+3. Use the **same email (or mobile) and password** as on [teliaplay.no](https://www.teliaplay.no/).
+4. If Telia still rejects that password — common when the website only offers **Google or BankID** — continue and approve the **TV code** on your phone. You stay on your own account.
 
 The first Telia Play Norway login on a new device may need BankID on [teliaplay.no](https://www.teliaplay.no/).
 

@@ -42,8 +42,12 @@ USER_AGENT: Final = (
 )
 AUTH_PENDING_CODE: Final = "50015"
 CLIENT_NAME: Final = "accountweb"
+CLIENT_NAME_WEB: Final = "web"
 CLIENT_VERSION: Final = "1.24.1"
 WHITE_LABEL: Final = "TELIA"
+SHARED_LOGIN_URL: Final = (
+    "https://logingateway-telia.clientapi-prod.live.tv.telia.net/logingateway"
+)
 
 PURCHASE_GATEWAY: Final = (
     "https://purchasegateway-telia.clientapi-prod.live.tv.telia.net/purchasegateway"
@@ -74,6 +78,7 @@ COUNTRIES: Final = {
         "login_url": "https://logingateway.teliaplay.no/logingateway",
         "login_origin": "https://login.teliaplay.no",
         "account_url": "https://account.teliaplay.no",
+        "play_url": "https://www.teliaplay.no",
         "timezone": "Europe/Oslo",
         "has_points_menu": True,
     },
@@ -83,6 +88,7 @@ COUNTRIES: Final = {
         "login_url": "https://logingateway.teliaplay.se/logingateway",
         "login_origin": "https://login.teliaplay.se",
         "account_url": "https://account.teliaplay.se",
+        "play_url": "https://www.teliaplay.se",
         "timezone": "Europe/Stockholm",
         "has_points_menu": False,
     },
@@ -92,6 +98,7 @@ COUNTRIES: Final = {
         "login_url": "https://logingateway.teliaplay.fi/logingateway",
         "login_origin": "https://login.teliaplay.fi",
         "account_url": "https://account.teliaplay.fi",
+        "play_url": "https://www.teliaplay.fi",
         "timezone": "Europe/Helsinki",
         "has_points_menu": False,
     },
@@ -101,6 +108,7 @@ COUNTRIES: Final = {
         "login_url": "https://logingateway.teliaplay.dk/logingateway",
         "login_origin": "https://login.teliaplay.dk",
         "account_url": "https://account.teliaplay.dk",
+        "play_url": "https://www.teliaplay.dk",
         "timezone": "Europe/Copenhagen",
         "has_points_menu": False,
     },

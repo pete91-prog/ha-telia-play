@@ -23,6 +23,8 @@ ids_for_streaming_names = _MODELS_MOD.ids_for_streaming_names
 match_item = _MODELS_MOD.match_item
 menu_from_api = _MODELS_MOD.menu_from_api
 normalize_username = _MODELS_MOD.normalize_username
+username_candidates = _MODELS_MOD.username_candidates
+extract_oauth_code = _MODELS_MOD.extract_oauth_code
 
 
 def _item(
@@ -113,10 +115,28 @@ class UsernameTests(unittest.TestCase):
             "user@gmail.com",
         )
 
+    def test_gmail_is_a_login_candidate(self) -> None:
+        self.assertIn("user@example.com", username_candidates("UserName@Gmail.com"))
+        self.assertIn(
+            "UserName@Gmail.com",
+            username_candidates("UserName@Gmail.com"),
+        )
+
     def test_norwegian_mobile(self) -> None:
         self.assertEqual(normalize_username("999 99 999"), "99999999")
         self.assertEqual(normalize_username("+47 999 99 999"), "+4799999999")
         self.assertEqual(normalize_username("004799999999"), "+4799999999")
+        self.assertIn("99999999", username_candidates("999 99 999"))
+        self.assertIn("+4799999999", username_candidates("999 99 999"))
+
+    def test_oauth_code_from_redirect(self) -> None:
+        self.assertEqual(
+            extract_oauth_code(
+                {"redirectUri": "https://www.teliaplay.no/?code=ABC123"}
+            ),
+            "ABC123",
+        )
+        self.assertEqual(extract_oauth_code({"authorizationCode": "ZZ"}), "ZZ")
 
 
 class ParseTests(unittest.TestCase):

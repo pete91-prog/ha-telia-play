@@ -3,26 +3,23 @@
     "step": {
       "user": {
         "title": "Telia Play",
-        "description": "Norway uses TV points (Valgmeny) to pick streaming services. Prefer the TV code if you sign in with BankID or Google on teliaplay.no.",
+        "description": "Use the same email (or mobile number) and password as on teliaplay.no. Leave both blank to pair with a TV code instead.",
         "data": {
           "country": "Country",
-          "login_method": "How to sign in",
+          "username": "Email or mobile number",
+          "password": "Password",
           "include_channels": "Also create switches for channel packages"
         }
       },
-      "password": {
-        "title": "Telia Play password",
-        "description": "Use the mobile number on the Telia TV subscription (not Gmail). The password is the one you set in Telia Play, not your Google password.",
-        "data": {
-          "username": "Mobile number",
-          "password": "Telia Play password"
-        }
+      "password_fallback": {
+        "title": "Continue with a TV code",
+        "description": "Telia did not accept {username} and that password ({error}). If the website signs you in with Google or BankID, approve a TV code on your phone — you stay on your own account."
       },
       "reauth_confirm": {
         "title": "Reauthenticate Telia Play",
         "data": {
-          "username": "Mobile number",
-          "password": "Telia Play password"
+          "username": "Email or mobile number",
+          "password": "Password"
         }
       }
     },
@@ -30,8 +27,7 @@
       "wait_approve": "Code: {code}\n\nOn your phone, open {url} while you are already logged in to Telia Play (BankID or Google is fine). This screen continues when you approve."
     },
     "error": {
-      "invalid_auth": "Could not sign in ({error}). Use the mobile number on the TV subscription and the Telia Play password, or choose TV code.",
-      "invalid_auth_email": "Telia Play Norway does not use Gmail as the username. Use the mobile number on the TV subscription, or choose TV code if you sign in with Google/BankID.",
+      "invalid_auth": "Could not sign in ({error}). Use the same email or mobile and password as in the browser, or leave them blank and pair with a TV code.",
       "cannot_connect": "Could not reach Telia Play.",
       "no_selection_menu": "Signed in, but this account has no Valgmeny / TV points selection. That feature is used on Telia Play Norway.",
       "tv_code_expired": "The TV code expired or was not approved. Try again."

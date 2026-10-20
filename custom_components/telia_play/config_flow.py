@@ -20,30 +20,17 @@ from .const import (
     CONF_COUNTRY,
     CONF_DEVICE_ID,
     CONF_INCLUDE_CHANNELS,
-    CONF_LOGIN_METHOD,
     CONF_PASSWORD,
     CONF_USERNAME,
     COUNTRIES,
     DEFAULT_COUNTRY,
     DOMAIN,
-    LOGIN_PASSWORD,
-    LOGIN_TV_CODE,
 )
 from .models import normalize_username
 
 COUNTRY_OPTIONS = [
     selector.SelectOptionDict(value=code, label=info["name"])
     for code, info in COUNTRIES.items()
-]
-LOGIN_OPTIONS = [
-    selector.SelectOptionDict(
-        value=LOGIN_TV_CODE,
-        label="TV-kode (BankID / Google / innlogget på telefonen)",
-    ),
-    selector.SelectOptionDict(
-        value=LOGIN_PASSWORD,
-        label="Mobilnummer + Telia Play-passord",
-    ),
 ]
 
 
@@ -56,10 +43,13 @@ def _user_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             ): selector.SelectSelector(
                 selector.SelectSelectorConfig(options=COUNTRY_OPTIONS, mode="dropdown")
             ),
-            vol.Required(
-                CONF_LOGIN_METHOD, default=defaults.get(CONF_LOGIN_METHOD, LOGIN_TV_CODE)
-            ): selector.SelectSelector(
-                selector.SelectSelectorConfig(options=LOGIN_OPTIONS, mode="dropdown")
+            vol.Optional(
+                CONF_USERNAME, default=defaults.get(CONF_USERNAME, "")
+            ): selector.TextSelector(
+                selector.TextSelectorConfig(autocomplete="username")
+            ),
+            vol.Optional(CONF_PASSWORD, default=""): selector.TextSelector(
+                selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
             ),
             vol.Optional(
                 CONF_INCLUDE_CHANNELS,
@@ -70,7 +60,7 @@ def _user_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
 
 
 class TeliaPlayConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Set up Telia Play with a TV code or mobile-number password."""
+    """Set up Telia Play with the same email/password as the website."""
 
     VERSION = 1
 
@@ -89,57 +79,60 @@ class TeliaPlayConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        placeholders: dict[str, str] = {"error": self._error or ""}
         if user_input is None:
-            return self.async_show_form(step_id="user", data_schema=_user_schema())
+            return self.async_show_form(
+                step_id="user",
+                data_schema=_user_schema(),
+                description_placeholders=placeholders,
+            )
         self._country = user_input[CONF_COUNTRY]
         self._include_channels = bool(user_input.get(CONF_INCLUDE_CHANNELS))
-        if user_input[CONF_LOGIN_METHOD] == LOGIN_PASSWORD:
-            return await self.async_step_password()
-        return await self.async_step_tv_code()
-
-    async def async_step_password(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        errors: dict[str, str] = {}
-        placeholders: dict[str, str] = {}
-        if user_input is not None:
-            username = normalize_username(user_input[CONF_USERNAME])
-            self._username = username
-            self._password = user_input[CONF_PASSWORD]
-            try:
-                tokens = await self._async_validate_password(
-                    username, user_input[CONF_PASSWORD]
-                )
-            except TeliaAuthError as err:
-                errors["base"] = (
-                    "invalid_auth_email" if "@" in username else "invalid_auth"
-                )
-                placeholders["error"] = str(err)
-            except TeliaApiError:
-                errors["base"] = "no_selection_menu"
-            except TeliaPlayError:
-                errors["base"] = "cannot_connect"
-            else:
-                return await self._async_finish(tokens)
-
-        schema = vol.Schema(
-            {
-                vol.Required(
-                    CONF_USERNAME, default=self._username
-                ): selector.TextSelector(
-                    selector.TextSelectorConfig(autocomplete="username")
-                ),
-                vol.Required(CONF_PASSWORD): selector.TextSelector(
-                    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
-                ),
-            }
-        )
+        username = str(user_input.get(CONF_USERNAME) or "").strip()
+        password = str(user_input.get(CONF_PASSWORD) or "")
+        self._username = normalize_username(username)
+        self._password = password
+        if not username or not password:
+            return await self.async_step_tv_code()
+        try:
+            tokens = await self._async_validate_password(username, password)
+        except TeliaAuthError as err:
+            self._error = str(err)
+            return await self.async_step_password_fallback()
+        except TeliaApiError:
+            errors["base"] = "no_selection_menu"
+        except TeliaPlayError:
+            errors["base"] = "cannot_connect"
+        else:
+            return await self._async_finish(tokens)
         return self.async_show_form(
-            step_id="password",
-            data_schema=schema,
+            step_id="user",
+            data_schema=_user_schema(
+                {
+                    CONF_COUNTRY: self._country,
+                    CONF_USERNAME: username,
+                    CONF_INCLUDE_CHANNELS: self._include_channels,
+                }
+            ),
             errors=errors,
             description_placeholders=placeholders,
         )
+
+    async def async_step_password_fallback(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Password was rejected — continue on the same account with a TV code."""
+        if user_input is None:
+            return self.async_show_form(
+                step_id="password_fallback",
+                data_schema=vol.Schema({}),
+                description_placeholders={
+                    "username": self._username or "",
+                    "error": self._error or "",
+                },
+            )
+        return await self.async_step_tv_code()
 
     async def async_step_tv_code(
         self, user_input: dict[str, Any] | None = None
@@ -153,7 +146,7 @@ class TeliaPlayConfigFlow(ConfigFlow, domain=DOMAIN):
                     data_schema=_user_schema(
                         {
                             CONF_COUNTRY: self._country,
-                            CONF_LOGIN_METHOD: LOGIN_TV_CODE,
+                            CONF_USERNAME: self._username,
                             CONF_INCLUDE_CHANNELS: self._include_channels,
                         }
                     ),
@@ -207,7 +200,7 @@ class TeliaPlayConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=_user_schema(
                 {
                     CONF_COUNTRY: self._country,
-                    CONF_LOGIN_METHOD: LOGIN_TV_CODE,
+                    CONF_USERNAME: self._username,
                     CONF_INCLUDE_CHANNELS: self._include_channels,
                 }
             ),
@@ -224,9 +217,9 @@ class TeliaPlayConfigFlow(ConfigFlow, domain=DOMAIN):
         placeholders: dict[str, str] = {}
         entry = self._get_reauth_entry()
         if user_input is not None:
-            username = normalize_username(
-                user_input.get(CONF_USERNAME, entry.data[CONF_USERNAME])
-            )
+            username = str(
+                user_input.get(CONF_USERNAME, entry.data[CONF_USERNAME]) or ""
+            ).strip()
             try:
                 tokens = await self._async_validate_password(
                     username,
@@ -243,7 +236,7 @@ class TeliaPlayConfigFlow(ConfigFlow, domain=DOMAIN):
                 return self.async_update_reload_and_abort(
                     entry,
                     data_updates={
-                        CONF_USERNAME: username,
+                        CONF_USERNAME: self._username or normalize_username(username),
                         CONF_PASSWORD: user_input[CONF_PASSWORD],
                         **tokens,
                     },
@@ -320,6 +313,8 @@ class TeliaPlayConfigFlow(ConfigFlow, domain=DOMAIN):
         client = self._client(username, password, device_id, boot_id)
         await client.async_login()
         await client.async_selection_menu()
+        account = await client.async_account_username()
+        self._username = normalize_username(account or client.username or username)
         self._device_id = client.device_id
         self._boot_id = client.boot_id
         return client.token_payload()

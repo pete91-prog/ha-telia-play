@@ -8,4 +8,4 @@ Use HACS → add this repository as a custom **Integration**, then download **Te
 
 ## Setup
 
-Settings → Devices & services → Add integration → **Telia Play**. Country **Norway**, then your Telia Play username and password.
+Settings → Devices & services → Add integration → **Telia Play**. Country **Norway**, then the same email (or mobile) and password as on teliaplay.no. If that is rejected, approve the TV code on your phone.
