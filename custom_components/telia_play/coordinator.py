@@ -13,13 +13,17 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .activation import (
+    KIND_MAX,
+    KIND_PRIME,
     STATUS_CODE_READY,
     STATUS_COMPLETED,
     STATUS_FAILED,
     STATUS_NEEDS_CODE,
     ActivationResult,
+    apply_partner_status,
     parse_activation_input,
     partner_hint,
+    partner_kind,
 )
 from .api import TeliaApiError, TeliaAuthError, TeliaPlayClient, TeliaPlayError
 from .const import (
@@ -268,13 +272,25 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
         if item.partner_id:
             partner_token = await self.client.async_partner_token(item.partner_id)
 
+        kind = partner_kind(
+            name=item.name,
+            family_name=item.family_name,
+            family_id=item.family_id,
+            url=activation_url,
+        )
         if not activation_url:
             status = STATUS_NEEDS_CODE if code is None else STATUS_FAILED
-            if _is_max_item(item):
+            if kind == KIND_MAX:
                 message = (
                     "Max sent an SMS with a link, then an email with a one-time code. "
                     "Paste the SMS link into the Activation code box, then paste the "
                     "6-digit email code. You do not need to wait for Telia’s mail."
+                )
+            elif kind == KIND_PRIME:
+                status = STATUS_COMPLETED
+                message = (
+                    f"{item.name} is enabled. Prime normally activates through Telia "
+                    "with no SMS or email code."
                 )
             else:
                 message = (
@@ -308,17 +324,27 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
                 family_id=item.family_id,
             )
 
-        status = str(opened.get("status") or STATUS_STARTED)
+        status = apply_partner_status(
+            str(opened.get("status") or STATUS_STARTED),
+            kind=kind,
+            http_status=opened.get("http_status"),
+        )
         pairing = opened.get("pairing_code")
         opened_url = opened.get("url") or activation_url
-        max_like = _is_max_item(item)
         if status == STATUS_COMPLETED:
-            message = (
-                f"{item.name} activation finished. You can sign in on Max with the "
-                "same email you used for the one-time code."
-                if max_like
-                else f"{item.name} activation finished on the Telia side. No email code was needed."
-            )
+            if kind == KIND_PRIME:
+                message = (
+                    f"{item.name} activated through Telia. No SMS or email code was needed."
+                )
+            elif kind == KIND_MAX:
+                message = (
+                    f"{item.name} activation finished. You can sign in on Max with the "
+                    "same email you used for the one-time code."
+                )
+            else:
+                message = (
+                    f"{item.name} activation finished on the Telia side. No email code was needed."
+                )
         elif status == STATUS_CODE_READY and pairing:
             message = (
                 f"{item.name} is ready to finish. Telia already issued this code "
@@ -326,25 +352,23 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
             )
         elif status == STATUS_FAILED:
             message = f"Could not open the {item.name} activation link."
-        elif status == STATUS_NEEDS_CODE or max_like:
+        elif status == STATUS_NEEDS_CODE:
             message = (
                 "Max sent an SMS with a link, then an email with a one-time code. "
                 "Paste the SMS link into the Activation code box (or "
                 "telia_play.submit_activation_code), then paste the 6-digit email code."
-                if max_like
+                if kind == KIND_MAX
                 else (
                     f"{item.name} still wants a partner code. Open the activation link "
                     "from this notification. If a code arrives by SMS or email, paste it "
                     "with telia_play.submit_activation_code."
                 )
             )
-            if max_like and status == STATUS_STARTED:
-                status = STATUS_NEEDS_CODE
         else:
             message = (
                 f"Opened the {item.name} activation link from Telia’s API instead of "
                 "waiting for email. Tap the link if the partner still asks you to confirm "
-                "the account (Netflix/Max login is theirs, not Telia’s)."
+                "the account (Netflix login is theirs, not Telia’s)."
             )
         return ActivationResult(
             item_id=item.id,
@@ -389,8 +413,3 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
             title=f"Activate {result.name}",
             notification_id=notification_id,
         )
-
-
-def _is_max_item(item: CatalogItem) -> bool:
-    blob = f"{item.name} {item.family_name or ''}".lower()
-    return "max" in blob or blob.strip() == "hbo"

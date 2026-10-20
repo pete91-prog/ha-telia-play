@@ -48,9 +48,14 @@ is_telia_host = activation.is_telia_host
 looks_like_url = activation.looks_like_url
 parse_activation_input = activation.parse_activation_input
 partner_hint = activation.partner_hint
+partner_kind = activation.partner_kind
+apply_partner_status = activation.apply_partner_status
 with_partner_token = activation.with_partner_token
 with_query = activation.with_query
 wants_email = activation.wants_email
+KIND_MAX = activation.KIND_MAX
+KIND_PRIME = activation.KIND_PRIME
+STATUS_STARTED = activation.STATUS_STARTED
 STATUS_CODE_READY = activation.STATUS_CODE_READY
 STATUS_COMPLETED = activation.STATUS_COMPLETED
 STATUS_NEEDS_CODE = activation.STATUS_NEEDS_CODE
@@ -232,6 +237,30 @@ class ActivationHelperTests(unittest.TestCase):
                 body="Enter your email address",
                 http_status=200,
             ),
+            STATUS_NEEDS_CODE,
+        )
+
+    def test_prime_kind_not_max(self) -> None:
+        self.assertEqual(
+            partner_kind(name="Prime Video", family_name="Amazon", family_id="8"),
+            KIND_PRIME,
+        )
+        self.assertEqual(
+            partner_kind(name="HBO Max standard", family_name="Max", family_id="7"),
+            KIND_MAX,
+        )
+
+    def test_prime_started_is_completed(self) -> None:
+        self.assertEqual(
+            apply_partner_status(STATUS_STARTED, kind=KIND_PRIME, http_status=200),
+            STATUS_COMPLETED,
+        )
+        self.assertEqual(
+            apply_partner_status(STATUS_NEEDS_CODE, kind=KIND_PRIME, http_status=200),
+            STATUS_NEEDS_CODE,
+        )
+        self.assertEqual(
+            apply_partner_status(STATUS_STARTED, kind=KIND_MAX, http_status=200),
             STATUS_NEEDS_CODE,
         )
 

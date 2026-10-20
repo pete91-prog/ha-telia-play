@@ -15,6 +15,12 @@ STATUS_CODE_READY = "code_ready"
 STATUS_NEEDS_CODE = "needs_code"
 STATUS_FAILED = "failed"
 
+KIND_MAX = "max"
+KIND_PRIME = "prime"
+KIND_NETFLIX = "netflix"
+KIND_VIAPLAY = "viaplay"
+KIND_DISNEY = "disney"
+
 _CODE_PATTERNS = (
     re.compile(
         r'["\'](?:activation)?(?:code|kode|otp|pin)["\']\s*[:=]\s*["\']([A-Za-z0-9]{4,12})["\']',
@@ -147,16 +153,50 @@ def partner_hint(url: str | None) -> str | None:
     path = (urlparse(url).path or "").lower()
     blob = f"{host} {path}"
     if is_max_host(url) or "hbo" in blob:
-        return "max"
+        return KIND_MAX
     if "netflix" in blob:
-        return "netflix"
+        return KIND_NETFLIX
     if "viaplay" in blob:
-        return "viaplay"
+        return KIND_VIAPLAY
     if "disney" in blob:
-        return "disney"
-    if "prime" in blob or "amazon" in blob:
-        return "prime"
+        return KIND_DISNEY
+    if "prime" in blob or "amazon" in blob or "primevideo" in blob:
+        return KIND_PRIME
     return None
+
+
+def partner_kind(
+    *,
+    name: str = "",
+    family_name: str | None = None,
+    family_id: str | None = None,
+    url: str | None = None,
+) -> str | None:
+    """Classify a Valgmeny tile as Max, Prime, etc."""
+    title = (name or "").lower()
+    family = (family_name or "").lower()
+    fid = str(family_id or "")
+    if fid == "7" or family == "max" or "hbo max" in title or title.strip() == "max":
+        return KIND_MAX
+    if url and is_max_host(url):
+        return KIND_MAX
+    if fid == "8" or family in {"amazon", "prime"} or "prime" in title or "amazon" in title:
+        return KIND_PRIME
+    if fid == "6" or "netflix" in title or family == "netflix":
+        return KIND_NETFLIX
+    return partner_hint(url)
+
+
+def apply_partner_status(
+    status: str, *, kind: str | None, http_status: int | None
+) -> str:
+    """Prime finishes on Telia's link; Max still needs the SMS + email OTP."""
+    if kind == KIND_PRIME and status == STATUS_STARTED:
+        if http_status is None or 200 <= int(http_status) < 400:
+            return STATUS_COMPLETED
+    if kind == KIND_MAX and status == STATUS_STARTED:
+        return STATUS_NEEDS_CODE
+    return status
 
 
 def wants_email(body: str | None, final_url: str | None = None) -> bool:

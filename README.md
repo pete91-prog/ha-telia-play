@@ -33,9 +33,13 @@ When you enable a service it will:
 4. If Telia already issued a pairing code on that page, surface it in a persistent notification — so you can type it on the TV without opening mail.
 5. If a partner still mailed a code or magic link anyway, paste it with `telia_play.submit_activation_code` (a full `https://…` link works too).
 
-A persistent notification is created per service, with a one-tap activation link. Switch attributes include `needs_activation`, `activation_url`, `activation_status`, and `pairing_code`. Max’s own SMS link and email code belong to Max — paste both into the activation box; Telia’s token is not sent to max.com.
+A persistent notification is created per service, with a one-tap activation link. Switch attributes include `needs_activation`, `activation_url`, `activation_status`, and `pairing_code`.
 
-Netflix / Max may still ask you to sign in to *their* account in the browser. That login belongs to them; this only skips Telia’s “wait for the email” step.
+How partners usually finish:
+
+- **Prime** — Telia’s activation link is enough. No SMS or email code.
+- **Max** — SMS with an `https://` link, then a 6-digit email code. Paste both into the Activation code box; Telia’s token is not sent to max.com.
+- **Netflix** (and similar) — may still ask you to sign in to *their* account in the browser. That login belongs to them; this only skips Telia’s “wait for the email” step.
 
 ## Install with HACS
 
