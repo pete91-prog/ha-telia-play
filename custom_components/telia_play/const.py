@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Final
 
 DOMAIN: Final = "telia_play"
-PLATFORMS: Final = ["sensor", "switch", "button"]
+PLATFORMS: Final = ["sensor", "switch", "button", "text"]
 
 CONF_COUNTRY: Final = "country"
 CONF_USERNAME: Final = "username"

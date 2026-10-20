@@ -38,6 +38,10 @@ _SUCCESS_HINTS = (
     "fullfort",
     "fullført",
     "aktivert",
+    "start streaming",
+    "ready to stream",
+    "you're ready",
+    "you are ready",
 )
 _PENDING_HINTS = (
     "enter code",
@@ -48,6 +52,31 @@ _PENDING_HINTS = (
     "verify",
     "one-time",
     "otp",
+    "one time code",
+    "one-time code",
+)
+_EMAIL_HINTS = (
+    "enter your email",
+    "enter email",
+    "e-post",
+    "email address",
+    "verify email",
+)
+
+_URL_IN_TEXT = re.compile(r"https?://[^\s<>\"']+", re.I)
+_LABELED_CODE = re.compile(
+    r"(?:one[- ]time code|activation code|aktiveringskode|your code|koden din|"
+    r"kode|code|otp|pin)\s*[:=]?\s*([A-Za-z0-9]{4,12})",
+    re.I,
+)
+_SIX_DIGIT = re.compile(r"(?<!\d)(\d{6})(?!\d)")
+_BARE_CODE = re.compile(r"^[A-Za-z0-9]{4,12}$")
+
+MAX_HOST_SUFFIXES = (
+    "max.com",
+    "hbomax.com",
+    "hbo.com",
+    "play.max.com",
 )
 
 
@@ -81,6 +110,15 @@ class ActivationResult:
         }
 
 
+@dataclass(slots=True)
+class ActivationInput:
+    """SMS link and/or email code pasted from Max / Telia."""
+
+    raw: str
+    url: str | None = None
+    code: str | None = None
+
+
 def is_telia_host(url: str) -> bool:
     host = (urlparse(url).hostname or "").lower()
     if not host:
@@ -92,6 +130,62 @@ def looks_like_url(value: str) -> bool:
     text = value.strip()
     parsed = urlparse(text)
     return parsed.scheme in ("http", "https") and bool(parsed.netloc)
+
+
+def is_max_host(url: str) -> bool:
+    host = (urlparse(url).hostname or "").lower()
+    if not host:
+        return False
+    return any(host == suffix or host.endswith("." + suffix) for suffix in MAX_HOST_SUFFIXES)
+
+
+def partner_hint(url: str | None) -> str | None:
+    """Guess which streaming service an SMS/email link belongs to."""
+    if not url:
+        return None
+    host = (urlparse(url).hostname or "").lower()
+    path = (urlparse(url).path or "").lower()
+    blob = f"{host} {path}"
+    if is_max_host(url) or "hbo" in blob:
+        return "max"
+    if "netflix" in blob:
+        return "netflix"
+    if "viaplay" in blob:
+        return "viaplay"
+    if "disney" in blob:
+        return "disney"
+    if "prime" in blob or "amazon" in blob:
+        return "prime"
+    return None
+
+
+def wants_email(body: str | None, final_url: str | None = None) -> bool:
+    blob = f"{final_url or ''} {body or ''}".lower()
+    return any(hint in blob for hint in _EMAIL_HINTS)
+
+
+def parse_activation_input(value: str) -> ActivationInput:
+    """Pull a Max SMS link and/or the email one-time code out of pasted text."""
+    text = (value or "").strip()
+    parsed = ActivationInput(raw=text)
+    if not text:
+        return parsed
+    if looks_like_url(text):
+        parsed.url = text
+        return parsed
+    match = _URL_IN_TEXT.search(text)
+    if match:
+        parsed.url = match.group(0).rstrip(").,]>\"'")
+    labeled = _LABELED_CODE.search(text)
+    if labeled:
+        parsed.code = labeled.group(1)
+    elif parsed.url is None and _BARE_CODE.fullmatch(text):
+        parsed.code = text
+    elif parsed.url is None:
+        six = _SIX_DIGIT.search(text)
+        if six:
+            parsed.code = six.group(1)
+    return parsed
 
 
 def with_query(url: str, **params: str | None) -> str:
@@ -130,7 +224,7 @@ def infer_status(*, final_url: str | None, body: str | None, http_status: int | 
         return STATUS_COMPLETED
     if extract_activation_code(body):
         return STATUS_CODE_READY
-    if any(hint in blob for hint in _PENDING_HINTS):
+    if wants_email(body, final_url) or any(hint in blob for hint in _PENDING_HINTS):
         return STATUS_NEEDS_CODE
     if http_status is not None and http_status >= 400:
         return STATUS_FAILED
@@ -140,12 +234,26 @@ def infer_status(*, final_url: str | None, body: str | None, http_status: int | 
 
 
 def code_payloads(code: str) -> list[dict[str, str]]:
-    """Bodies Telia / partner pages commonly accept for a pasted activation code."""
+    """Bodies Telia / Max pages commonly accept for a pasted activation code."""
     return [
         {"code": code},
         {"activationCode": code},
         {"activation_code": code},
+        {"oneTimeCode": code},
         {"otp": code},
+        {"otpCode": code},
+        {"verificationCode": code},
+        {"verification_code": code},
         {"pinCode": code},
         {"pin": code},
+        {"token": code},
+    ]
+
+
+def email_payloads(email: str) -> list[dict[str, str]]:
+    return [
+        {"email": email},
+        {"emailAddress": email},
+        {"username": email},
+        {"login": email},
     ]

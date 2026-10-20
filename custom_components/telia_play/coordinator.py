@@ -18,7 +18,8 @@ from .activation import (
     STATUS_FAILED,
     STATUS_NEEDS_CODE,
     ActivationResult,
-    looks_like_url,
+    parse_activation_input,
+    partner_hint,
 )
 from .api import TeliaApiError, TeliaAuthError, TeliaPlayClient, TeliaPlayError
 from .const import (
@@ -42,6 +43,7 @@ from .models import (
     enrich_menu,
     ids_after_toggle,
     ids_for_streaming_names,
+    match_item,
     vas_activation_url,
 )
 
@@ -195,22 +197,47 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
             raise HomeAssistantError(str(err)) from err
         return await self.async_activate_item(item, notify=True)
 
-    async def async_submit_code(self, query: str, code: str) -> ActivationResult:
-        try:
-            item = self.menu.find(query)
-        except UnknownServiceError as err:
-            raise HomeAssistantError(str(err)) from err
-        value = code.strip()
+    async def async_submit_code(
+        self, query: str | None, code: str
+    ) -> ActivationResult:
+        value = (code or "").strip()
         if not value:
             raise HomeAssistantError("Activation code is empty")
-        if looks_like_url(value):
-            result = await self._async_open(item, url=value, code=None)
-        else:
-            result = await self._async_open(item, url=item.activation_url, code=value)
+        pasted = parse_activation_input(value)
+        item = self._resolve_activation_item(query, pasted.url)
+        previous = self.activations.get(item.id)
+        target = (
+            pasted.url
+            or (previous.activation_url if previous else None)
+            or item.activation_url
+        )
+        result = await self._async_open(item, url=target, code=pasted.code)
         self.activations[item.id] = result
         self._notify_activation(result)
         await self._async_refresh_menu_quiet()
         return result
+
+    def _resolve_activation_item(
+        self, query: str | None, url: str | None
+    ) -> CatalogItem:
+        hint = (query or "").strip() or partner_hint(url)
+        pending = [item for item in self.menu.streaming_services if item.needs_activation]
+        if hint:
+            try:
+                return self.menu.find(hint)
+            except UnknownServiceError:
+                matched = match_item(pending, hint)
+                if matched:
+                    return matched
+        if len(pending) == 1:
+            return pending[0]
+        if hint:
+            raise HomeAssistantError(f"No Telia Play service matched '{hint}'")
+        names = ", ".join(item.name for item in pending) or "none"
+        raise HomeAssistantError(
+            "Say which service the SMS/email belongs to "
+            f"(pending: {names}), or paste the full Max link."
+        )
 
     async def async_activate_item(
         self, item: CatalogItem, *, notify: bool = True
@@ -243,11 +270,18 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
 
         if not activation_url:
             status = STATUS_NEEDS_CODE if code is None else STATUS_FAILED
-            message = (
-                f"{item.name} is enabled with TV points, but Telia has not issued an "
-                "activation link yet. If a code arrives, submit it with "
-                "telia_play.submit_activation_code."
-            )
+            if _is_max_item(item):
+                message = (
+                    "Max sent an SMS with a link, then an email with a one-time code. "
+                    "Paste the SMS link into the Activation code box, then paste the "
+                    "6-digit email code. You do not need to wait for Telia’s mail."
+                )
+            else:
+                message = (
+                    f"{item.name} is enabled with TV points, but Telia has not issued an "
+                    "activation link yet. If a code arrives, submit it with "
+                    "telia_play.submit_activation_code."
+                )
             return ActivationResult(
                 item_id=item.id,
                 name=item.name,
@@ -256,9 +290,13 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
                 family_id=item.family_id,
             )
 
+        email = self.client.username if "@" in (self.client.username or "") else None
         try:
             opened = await self.client.async_open_activation_url(
-                activation_url, partner_token=partner_token, code=code
+                activation_url,
+                partner_token=partner_token,
+                code=code,
+                email=email,
             )
         except TeliaApiError as err:
             return ActivationResult(
@@ -273,23 +311,35 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
         status = str(opened.get("status") or STATUS_STARTED)
         pairing = opened.get("pairing_code")
         opened_url = opened.get("url") or activation_url
+        max_like = _is_max_item(item)
         if status == STATUS_COMPLETED:
             message = (
-                f"{item.name} activation finished on the Telia side. No email code was needed."
+                f"{item.name} activation finished. You can sign in on Max with the "
+                "same email you used for the one-time code."
+                if max_like
+                else f"{item.name} activation finished on the Telia side. No email code was needed."
             )
         elif status == STATUS_CODE_READY and pairing:
             message = (
                 f"{item.name} is ready to finish. Telia already issued this code "
                 f"(no need to wait for mail): {pairing}"
             )
-        elif status == STATUS_NEEDS_CODE:
-            message = (
-                f"{item.name} still wants a partner code. Open the Telia activation link "
-                "from this notification instead of waiting for email. If a code does "
-                "show up, paste it with telia_play.submit_activation_code."
-            )
         elif status == STATUS_FAILED:
             message = f"Could not open the {item.name} activation link."
+        elif status == STATUS_NEEDS_CODE or max_like:
+            message = (
+                "Max sent an SMS with a link, then an email with a one-time code. "
+                "Paste the SMS link into the Activation code box (or "
+                "telia_play.submit_activation_code), then paste the 6-digit email code."
+                if max_like
+                else (
+                    f"{item.name} still wants a partner code. Open the activation link "
+                    "from this notification. If a code arrives by SMS or email, paste it "
+                    "with telia_play.submit_activation_code."
+                )
+            )
+            if max_like and status == STATUS_STARTED:
+                status = STATUS_NEEDS_CODE
         else:
             message = (
                 f"Opened the {item.name} activation link from Telia’s API instead of "
@@ -339,3 +389,8 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
             title=f"Activate {result.name}",
             notification_id=notification_id,
         )
+
+
+def _is_max_item(item: CatalogItem) -> bool:
+    blob = f"{item.name} {item.family_name or ''}".lower()
+    return "max" in blob or blob.strip() == "hbo"

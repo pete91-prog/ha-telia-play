@@ -63,6 +63,11 @@
       "activate": {
         "name": "Activate {name}"
       }
+    },
+    "text": {
+      "activation_code": {
+        "name": "Activation code"
+      }
     }
   },
   "exceptions": {

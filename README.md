@@ -33,7 +33,7 @@ When you enable a service it will:
 4. If Telia already issued a pairing code on that page, surface it in a persistent notification — so you can type it on the TV without opening mail.
 5. If a partner still mailed a code or magic link anyway, paste it with `telia_play.submit_activation_code` (a full `https://…` link works too).
 
-A persistent notification is created per service, with a one-tap activation link. Switch attributes include `needs_activation`, `activation_url`, `activation_status`, and `pairing_code`.
+A persistent notification is created per service, with a one-tap activation link. Switch attributes include `needs_activation`, `activation_url`, `activation_status`, and `pairing_code`. Max’s own SMS link and email code belong to Max — paste both into the activation box; Telia’s token is not sent to max.com.
 
 Netflix / Max may still ask you to sign in to *their* account in the browser. That login belongs to them; this only skips Telia’s “wait for the email” step.
 
@@ -107,14 +107,23 @@ data:
   service: Viaplay
 ```
 
-Paste a code or magic link if a partner still sent one:
+Paste a code or magic link if a partner still sent one. **Max** typically texts an `https://` link, then emails a 6-digit one-time code — paste the SMS link first, then the email code (the service name is optional if only Max is waiting):
 
 ```yaml
 action: telia_play.submit_activation_code
 data:
-  service: Viaplay
-  code: AB12CD
+  service: Max
+  code: https://www.max.com/activate/...
 ```
+
+```yaml
+action: telia_play.submit_activation_code
+data:
+  service: Max
+  code: 123456
+```
+
+There is also an **Activation code** text box on the Telia Play device for the same paste.
 
 Voice / Assist example: “Turn on Netflix on Telia Play” can call `telia_play.enable_service`.
 

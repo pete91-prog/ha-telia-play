@@ -51,19 +51,19 @@ activate_service:
 
 submit_activation_code:
   name: Submit activation code
-  description: Paste a code or magic link if a partner still sent one. A full https URL from the mail also works.
+  description: Paste the Max SMS link, then the 6-digit email code. A full https URL also works. Service can be omitted when only Max is waiting.
   fields:
     service:
       name: Service
-      description: Name or id of the service the code belongs to.
-      required: true
-      example: Viaplay
+      description: Name or id, for example Max. Optional if only one service needs activation.
+      required: false
+      example: Max
       selector:
         text:
     code:
       name: Code
-      description: Activation code, PIN, or the full link from the email.
+      description: The SMS https link from Max, or the one-time code from the Max email.
       required: true
-      example: AB12CD
+      example: 123456
       selector:
         text:

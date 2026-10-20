@@ -96,7 +96,7 @@ def _async_register_services(hass: HomeAssistant) -> None:
     async def _submit_code(call: ServiceCall) -> dict[str, Any]:
         coordinator = _coordinator(hass)
         result = await coordinator.async_submit_code(
-            call.data[ATTR_SERVICE], call.data[ATTR_CODE]
+            call.data.get(ATTR_SERVICE), call.data[ATTR_CODE]
         )
         return result.as_dict()
 
@@ -134,7 +134,7 @@ def _async_register_services(hass: HomeAssistant) -> None:
         _submit_code,
         schema=vol.Schema(
             {
-                vol.Required(ATTR_SERVICE): cv.string,
+                vol.Optional(ATTR_SERVICE): cv.string,
                 vol.Required(ATTR_CODE): cv.string,
             }
         ),

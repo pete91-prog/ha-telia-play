@@ -43,10 +43,14 @@ enrich_menu = models.enrich_menu
 vas_activation_url = models.vas_activation_url
 extract_activation_code = activation.extract_activation_code
 infer_status = activation.infer_status
+is_max_host = activation.is_max_host
 is_telia_host = activation.is_telia_host
 looks_like_url = activation.looks_like_url
+parse_activation_input = activation.parse_activation_input
+partner_hint = activation.partner_hint
 with_partner_token = activation.with_partner_token
 with_query = activation.with_query
+wants_email = activation.wants_email
 STATUS_CODE_READY = activation.STATUS_CODE_READY
 STATUS_COMPLETED = activation.STATUS_COMPLETED
 STATUS_NEEDS_CODE = activation.STATUS_NEEDS_CODE
@@ -201,6 +205,35 @@ class ActivationHelperTests(unittest.TestCase):
         url = with_query("https://example/a?code=old", code="new")
         self.assertIn("code=new", url)
         self.assertNotIn("code=old", url)
+
+    def test_parse_max_sms_link(self) -> None:
+        pasted = parse_activation_input(
+            "Aktiver HBO Max: https://www.max.com/no/activate/abc123"
+        )
+        self.assertEqual(pasted.url, "https://www.max.com/no/activate/abc123")
+        self.assertIsNone(pasted.code)
+        self.assertEqual(partner_hint(pasted.url), "max")
+        self.assertTrue(is_max_host(pasted.url))
+
+    def test_parse_max_email_code(self) -> None:
+        pasted = parse_activation_input("Your One-Time HBO Max Code: 847291")
+        self.assertEqual(pasted.code, "847291")
+        self.assertIsNone(pasted.url)
+
+    def test_parse_bare_six_digit(self) -> None:
+        pasted = parse_activation_input("847291")
+        self.assertEqual(pasted.code, "847291")
+
+    def test_max_page_wants_email(self) -> None:
+        self.assertTrue(wants_email("Enter your email address to continue", None))
+        self.assertEqual(
+            infer_status(
+                final_url="https://auth.max.com/login",
+                body="Enter your email address",
+                http_status=200,
+            ),
+            STATUS_NEEDS_CODE,
+        )
 
 
 if __name__ == "__main__":

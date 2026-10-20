@@ -63,6 +63,11 @@
       "activate": {
         "name": "Aktivera {name}"
       }
+    },
+    "text": {
+      "activation_code": {
+        "name": "Aktiveringskod"
+      }
     }
   }
 }

@@ -15,6 +15,11 @@
       "activate": {
         "default": "mdi:qrcode"
       }
+    },
+    "text": {
+      "activation_code": {
+        "default": "mdi:message-text"
+      }
     }
   }
 }

@@ -13,9 +13,11 @@ from aiohttp import ClientError, ClientSession, ClientTimeout
 
 from .activation import (
     code_payloads,
+    email_payloads,
     extract_activation_code,
     infer_status,
     is_telia_host,
+    wants_email,
     with_partner_token,
     with_query,
 )
@@ -416,27 +418,36 @@ class TeliaPlayClient:
         *,
         partner_token: str | None = None,
         code: str | None = None,
+        email: str | None = None,
     ) -> dict[str, Any]:
-        """Open the same activation link Telia puts in QR / email, using this session."""
+        """Open Telia's activation link or a Max SMS link, then submit an email code."""
         if not url:
             raise TeliaApiError("No activation URL")
-        if partner_token and is_telia_host(url):
-            target = with_partner_token(url, partner_token)
-        elif partner_token:
-            target = with_query(url, partnerToken=partner_token)
-        else:
-            target = url
+        telia = is_telia_host(url)
+        target = with_partner_token(url, partner_token) if partner_token and telia else url
         if code:
-            target = with_query(target, code=code, activationCode=code)
-        result = await self._fetch_url(target, partner_token=partner_token)
-        if code and is_telia_host(url) and result.get("status", 0) >= 400:
-            posted = await self._post_code(url, code, partner_token=partner_token)
+            target = with_query(target, code=code, activationCode=code, otp=code)
+        token = partner_token if telia else None
+        result = await self._fetch_url(target, partner_token=token)
+        body = str(result.get("text") or "")
+        final_url = str(result.get("url") or target)
+        if email and "@" in email and wants_email(body, final_url):
+            emailed = await self._post_payloads(final_url, email_payloads(email), partner_token=token)
+            if emailed is not None:
+                result = emailed
+                body = str(result.get("text") or body)
+                final_url = str(result.get("url") or final_url)
+        if code:
+            posted = await self._post_code(final_url, code, partner_token=token)
+            if posted is None and final_url != url:
+                posted = await self._post_code(url, code, partner_token=token)
             if posted is not None:
                 result = posted
-        body = str(result.get("text") or "")
+                body = str(result.get("text") or body)
+                final_url = str(result.get("url") or final_url)
         pairing = extract_activation_code(body)
         status = infer_status(
-            final_url=result.get("url"),
+            final_url=final_url,
             body=body,
             http_status=result.get("status"),
         )
@@ -448,12 +459,13 @@ class TeliaPlayClient:
                 or json_payload.get("redirectUrl")
             )
             if nested and not pairing:
-                follow = await self._fetch_url(str(nested), partner_token=partner_token)
+                follow = await self._fetch_url(str(nested), partner_token=token)
                 body = str(follow.get("text") or body)
                 pairing = extract_activation_code(body) or pairing
                 result = follow
+                final_url = str(result.get("url") or final_url)
                 status = infer_status(
-                    final_url=result.get("url"),
+                    final_url=final_url,
                     body=body,
                     http_status=result.get("status"),
                 )
@@ -462,7 +474,7 @@ class TeliaPlayClient:
         return {
             "status": status,
             "http_status": result.get("status"),
-            "url": result.get("url") or target,
+            "url": final_url or target,
             "requested_url": target,
             "pairing_code": pairing,
             "json": json_payload,
@@ -471,20 +483,33 @@ class TeliaPlayClient:
     async def _post_code(
         self, url: str, code: str, *, partner_token: str | None
     ) -> dict[str, Any] | None:
+        return await self._post_payloads(url, code_payloads(code), partner_token=partner_token)
+
+    async def _post_payloads(
+        self,
+        url: str,
+        payloads: list[dict[str, str]],
+        *,
+        partner_token: str | None,
+    ) -> dict[str, Any] | None:
         last: dict[str, Any] | None = None
-        for body in code_payloads(code):
-            try:
-                last = await self._fetch_url(
-                    url,
-                    method="POST",
-                    json_body=body,
-                    partner_token=partner_token,
-                )
-            except TeliaPlayError:
-                continue
-            status = last.get("status") or 0
-            if 200 <= status < 300:
-                return last
+        for body in payloads:
+            for kwargs in (
+                {"json_body": body},
+                {"form_body": body},
+            ):
+                try:
+                    last = await self._fetch_url(
+                        url,
+                        method="POST",
+                        partner_token=partner_token,
+                        **kwargs,
+                    )
+                except TeliaPlayError:
+                    continue
+                status = last.get("status") or 0
+                if 200 <= status < 400:
+                    return last
         return last
 
     async def _fetch_url(
@@ -493,6 +518,7 @@ class TeliaPlayClient:
         *,
         method: str = "GET",
         json_body: dict[str, Any] | None = None,
+        form_body: dict[str, str] | None = None,
         partner_token: str | None = None,
     ) -> dict[str, Any]:
         current = url
@@ -508,13 +534,20 @@ class TeliaPlayClient:
                         headers["x-partner-token"] = partner_token
                 else:
                     headers = {"accept": "*/*", "user-agent": USER_AGENT}
+                request_kwargs: dict[str, Any] = {
+                    "headers": headers,
+                    "timeout": _TIMEOUT,
+                    "allow_redirects": False,
+                }
+                if request_method != "GET":
+                    if form_body is not None:
+                        request_kwargs["data"] = form_body
+                    elif json_body is not None:
+                        request_kwargs["json"] = json_body
                 async with self._session.request(
                     request_method,
                     current,
-                    json=json_body if request_method != "GET" else None,
-                    headers=headers,
-                    timeout=_TIMEOUT,
-                    allow_redirects=False,
+                    **request_kwargs,
                 ) as response:
                     if response.status in (301, 302, 303, 307, 308):
                         location = response.headers.get("Location")
@@ -530,6 +563,7 @@ class TeliaPlayClient:
                         if response.status == 303:
                             request_method = "GET"
                             json_body = None
+                            form_body = None
                         current = urljoin(current, location)
                         continue
                     text = await response.text()

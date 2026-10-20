@@ -38,15 +38,21 @@ TeliaPlayClient = api.TeliaPlayClient
 
 
 class _Resp:
-    def __init__(self, status: int, payload: object) -> None:
+    def __init__(self, status: int, payload: object, url: str = "https://example") -> None:
         self.status = status
-        self.content_type = "application/json"
+        self.content_type = (
+            "text/html" if isinstance(payload, str) else "application/json"
+        )
         self._payload = payload
+        self.url = url
+        self.headers: dict[str, str] = {}
 
     async def json(self, content_type=None):
         return self._payload
 
     async def text(self):
+        if isinstance(self._payload, str):
+            return self._payload
         return json.dumps(self._payload)
 
     async def __aenter__(self):
@@ -63,8 +69,13 @@ class _Session:
 
     def request(self, method, url, **kwargs):
         self.calls.append({"method": method, "url": url, **kwargs})
-        status, payload = self.handler(method, url, kwargs)
-        return _Resp(status, payload)
+        result = self.handler(method, url, kwargs)
+        if len(result) == 3:
+            status, payload, resp_url = result
+        else:
+            status, payload = result
+            resp_url = url
+        return _Resp(status, payload, resp_url)
 
 
 def _run(coro):
@@ -145,6 +156,45 @@ class LoginTests(unittest.TestCase):
         )
         with self.assertRaises(TeliaAuthError):
             _run(client.async_login())
+
+
+class MaxActivationTests(unittest.TestCase):
+    def test_posts_email_code_to_max_sms_link(self) -> None:
+        session = _Session(
+            lambda method, url, kwargs: (
+                200,
+                "Start Streaming. You're ready to stream.",
+                url,
+            )
+        )
+        client = TeliaPlayClient(
+            session,
+            "NO",
+            "user@example.com",
+            "x",
+            device_id="dev",
+            boot_id="boot",
+        )
+        opened = _run(
+            client.async_open_activation_url(
+                "https://www.max.com/no/activate/abc",
+                code="847291",
+                partner_token="telia-secret",
+            )
+        )
+        self.assertEqual(opened["status"], "completed")
+        urls = [call["url"] for call in session.calls]
+        self.assertTrue(any("max.com" in url for url in urls))
+        self.assertFalse(any("telia-secret" in url for url in urls))
+        self.assertTrue(
+            any(
+                (call.get("json") or call.get("data") or {}).get("code") == "847291"
+                or (call.get("json") or call.get("data") or {}).get("oneTimeCode")
+                == "847291"
+                for call in session.calls
+                if call["method"] == "POST"
+            )
+        )
 
 
 if __name__ == "__main__":
