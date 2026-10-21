@@ -92,7 +92,7 @@ def _connect(host: str, port: int, username: str, password: str) -> imaplib.IMAP
     except imaplib.IMAP4.error as err:
         raise MailError("Mailbox login failed") from err
     except OSError as err:
-        raise MailError(f"Could not reach mailbox {host}:{port}") from err
+        raise MailError("Could not reach the mailbox server") from err
     return client
 
 

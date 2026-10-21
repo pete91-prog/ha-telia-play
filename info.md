@@ -10,4 +10,4 @@ Use HACS → add this repository as a custom **Integration**, then download **Te
 
 Settings → Devices & services → Add integration → **Telia Play**. Country **Norway**, then the same email (or mobile) and password as on teliaplay.no. If that is rejected, approve the TV code on your phone.
 
-Optional: **Configure** the integration with IMAP for a mailbox you own so HBO Max email codes are submitted automatically. You can also use Home Assistant’s IMAP integration on that inbox. Enter that address only in Home Assistant — never in this repository.
+Optional: **Configure** the integration with IMAP for a mailbox you own so HBO Max email codes are submitted automatically. You can also use Home Assistant’s IMAP integration on that inbox. That address, password, and Telia login stay only on your Home Assistant — never in this repository.

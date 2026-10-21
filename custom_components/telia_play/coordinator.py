@@ -60,6 +60,7 @@ from .const import (
     SCAN_INTERVAL_SECONDS,
 )
 from .mail import MailError, fetch_recent_messages
+from .privacy import redact
 from .models import (
     CatalogItem,
     NotEnoughPointsError,
@@ -307,7 +308,9 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
                 try:
                     await self.async_activate_item(item, notify=notify)
                 except TeliaPlayError as err:
-                    _LOGGER.warning("Could not start activation for %s: %s", item.name, err)
+                    _LOGGER.warning(
+                        "Could not start activation for %s: %s", item.name, redact(err)
+                    )
 
     async def _async_open(
         self,
@@ -499,7 +502,7 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
             menu = enrich_menu(menu, families)
             self.async_set_updated_data(menu)
         except TeliaPlayError as err:
-            _LOGGER.debug("Could not refresh Max activation URL: %s", err)
+            _LOGGER.debug("Could not refresh Max activation URL: %s", redact(err))
             return None
         current = next(
             (entry for entry in menu.streaming_services if entry.id == item.id),
@@ -515,7 +518,7 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
         try:
             menu = await self._async_load_menu()
         except TeliaPlayError as err:
-            _LOGGER.debug("Menu refresh after activation failed: %s", err)
+            _LOGGER.debug("Menu refresh after activation failed: %s", redact(err))
             return
         self.async_set_updated_data(menu)
         await self._async_persist_tokens()
@@ -638,9 +641,9 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
                 await self._async_ingest_mail_code(code, source="imap")
                 break
         except MailError as err:
-            _LOGGER.warning("Max mailbox poll failed: %s", err)
+            _LOGGER.warning("Max mailbox poll failed: %s", redact(err))
         except Exception as err:  # noqa: BLE001 - never fail the coordinator on mail
-            _LOGGER.warning("Max mailbox poll failed: %s", err)
+            _LOGGER.warning("Max mailbox poll failed: %s", redact(err))
         finally:
             self._imap_busy = False
 
@@ -655,7 +658,7 @@ class TeliaPlayCoordinator(DataUpdateCoordinator[SelectionMenu]):
             try:
                 result = await self.async_submit_code("Max", code)
             except HomeAssistantError as err:
-                _LOGGER.warning("Could not submit Max mail code: %s", err)
+                _LOGGER.warning("Could not submit Max mail code: %s", redact(err))
                 self._used_mail_codes.discard(code)
                 return
             if result.status == STATUS_COMPLETED:

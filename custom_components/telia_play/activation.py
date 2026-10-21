@@ -109,14 +109,12 @@ class ActivationResult:
         return self.status == STATUS_COMPLETED
 
     def as_dict(self) -> dict[str, Any]:
+        """Status only — links and codes stay in Home Assistant, not service traces."""
         return {
             "id": self.item_id,
             "name": self.name,
             "status": self.status,
             "message": self.message,
-            "activation_url": self.activation_url,
-            "partner_url": self.partner_url,
-            "pairing_code": self.pairing_code,
             "family_id": self.family_id,
         }
 

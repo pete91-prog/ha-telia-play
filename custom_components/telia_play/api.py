@@ -35,6 +35,7 @@ from .const import (
     USER_AGENT,
     WHITE_LABEL,
 )
+from .privacy import redact
 from .models import (
     SelectionMenu,
     StreamingFamily,
@@ -192,12 +193,11 @@ class TeliaPlayClient:
                 except TeliaAuthError as err:
                     last_error = err
                     _LOGGER.debug(
-                        "Telia %s as %s via %s (%s) failed: %s",
+                        "Telia %s via %s (%s) failed: %s",
                         kind,
-                        username,
                         gateway,
                         client_name,
-                        err,
+                        redact(err),
                     )
                     continue
                 self._username = username
@@ -330,7 +330,7 @@ class TeliaPlayClient:
             )
             self._store_tokens(payload)
         except (TeliaAuthError, TeliaApiError) as err:
-            _LOGGER.info("Refresh token failed (%s), logging in again", err)
+            _LOGGER.info("Refresh token failed (%s), logging in again", redact(err))
             await self.async_login()
 
     async def async_ensure_token(self) -> None:
@@ -387,7 +387,7 @@ class TeliaPlayClient:
                 authorized=True,
             )
         except TeliaPlayError as err:
-            _LOGGER.debug("Value-added services list unavailable: %s", err)
+            _LOGGER.debug("Value-added services list unavailable: %s", redact(err))
             return None
 
     async def async_partner_token(
@@ -418,7 +418,7 @@ class TeliaPlayClient:
                 json_body={},
             )
         except TeliaPlayError as err:
-            _LOGGER.debug("Partner token for %s failed: %s", partner_id, err)
+            _LOGGER.debug("Partner token for %s failed: %s", partner_id, redact(err))
             return None
         if not isinstance(payload, dict):
             return None

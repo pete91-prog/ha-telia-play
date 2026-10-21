@@ -1,33 +1,14 @@
-"""Diagnostics for Telia Play."""
+"""Diagnostics for Telia Play — no personal data leaves Home Assistant."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import (
-    CONF_ACCESS_TOKEN,
-    CONF_IMAP_PASSWORD,
-    CONF_IMAP_USERNAME,
-    CONF_PASSWORD,
-    CONF_REFRESH_TOKEN,
-    CONF_USERNAME,
-    DOMAIN,
-)
+from .const import CONF_COUNTRY, CONF_PASSWORD, CONF_USERNAME, DOMAIN
 from .coordinator import TeliaPlayCoordinator
-
-TO_REDACT = {
-    CONF_USERNAME,
-    CONF_PASSWORD,
-    CONF_ACCESS_TOKEN,
-    CONF_REFRESH_TOKEN,
-    CONF_IMAP_USERNAME,
-    CONF_IMAP_PASSWORD,
-    "raw",
-}
 
 
 async def async_get_config_entry_diagnostics(
@@ -36,9 +17,10 @@ async def async_get_config_entry_diagnostics(
     coordinator: TeliaPlayCoordinator = hass.data[DOMAIN][entry.entry_id]
     menu = coordinator.data
     return {
-        "entry": async_redact_data(dict(entry.data), TO_REDACT),
-        "options": async_redact_data(dict(entry.options), TO_REDACT),
-        "imap": {"configured": coordinator.imap_configured},
+        "country": entry.data.get(CONF_COUNTRY),
+        "has_telia_login": bool(entry.data.get(CONF_USERNAME)),
+        "has_telia_password": bool(entry.data.get(CONF_PASSWORD)),
+        "imap_configured": coordinator.imap_configured,
         "points": None
         if menu is None
         else {
@@ -47,7 +29,6 @@ async def async_get_config_entry_diagnostics(
             "remaining": menu.points_remaining,
             "streaming": [
                 {
-                    "id": item.id,
                     "name": item.name,
                     "points": item.points,
                     "enabled": item.is_selected,

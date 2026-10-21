@@ -31,6 +31,7 @@ def _load(name: str, file_name: str):
 _load(f"{_PACKAGE}.const", "const.py")
 _load(f"{_PACKAGE}.models", "models.py")
 _load(f"{_PACKAGE}.activation", "activation.py")
+_load(f"{_PACKAGE}.privacy", "privacy.py")
 api = _load(f"{_PACKAGE}.api", "api.py")
 
 TeliaAuthError = api.TeliaAuthError

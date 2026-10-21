@@ -156,10 +156,9 @@ def _snapshot(coordinator: TeliaPlayCoordinator, menu) -> dict[str, Any]:
                 "points": item.points,
                 "enabled": item.is_selected,
                 "needs_activation": item.needs_activation,
-                "activation_url": item.activation_url,
-                "activation": None
+                "activation_status": None
                 if coordinator.activation_for(item.id) is None
-                else coordinator.activation_for(item.id).as_dict(),
+                else coordinator.activation_for(item.id).status,
             }
             for item in menu.streaming_services
         ],

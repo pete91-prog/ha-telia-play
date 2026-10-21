@@ -53,7 +53,7 @@ Create that mailbox yourself if you want a dedicated address. Enter the address,
    - **or** add Home Assistant’s built-in **IMAP** integration on that same inbox. New `imap_content` events are picked up automatically.
 3. Enable Max (or press **Activate HBO/Max**). Telia’s SMS link is opened from the API; when Max mails the code, it is submitted on its own.
 
-Polling runs only while Max still needs a code. Credentials stay in your Home Assistant config entry, not in git.
+Polling runs only while Max still needs a code. Telia login, mailbox address, app password, tokens, and one-time codes are stored **only in your Home Assistant** (config entries). They are not written to this repository, not included in diagnostics you download, and not written to Home Assistant logs.
 
 ## Install with HACS
 

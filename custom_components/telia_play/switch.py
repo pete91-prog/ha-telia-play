@@ -46,6 +46,14 @@ class TeliaPlayServiceSwitch(CoordinatorEntity[TeliaPlayCoordinator], SwitchEnti
     """Turn one Valgmeny item on or off."""
 
     _attr_has_entity_name = True
+    _unrecorded_attributes = frozenset(
+        {
+            "activation_url",
+            "partner_url",
+            "pairing_code",
+            "activation_message",
+        }
+    )
 
     def __init__(self, coordinator: TeliaPlayCoordinator, item_id: str) -> None:
         super().__init__(coordinator)

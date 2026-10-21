@@ -33,6 +33,7 @@ class TeliaPlayPointsSensor(CoordinatorEntity[TeliaPlayCoordinator], SensorEntit
     _attr_native_unit_of_measurement = "points"
     _attr_icon = "mdi:star-four-points"
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _unrecorded_attributes = frozenset({"streaming_services"})
 
     def __init__(self, coordinator: TeliaPlayCoordinator, kind: str) -> None:
         super().__init__(coordinator)
@@ -68,7 +69,6 @@ class TeliaPlayPointsSensor(CoordinatorEntity[TeliaPlayCoordinator], SensorEntit
                     "points": item.points,
                     "enabled": item.is_selected,
                     "needs_activation": item.needs_activation,
-                    "activation_url": item.activation_url,
                     "family": item.family_name,
                 }
                 for item in menu.streaming_services
