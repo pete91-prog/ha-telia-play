@@ -116,7 +116,7 @@ class UsernameTests(unittest.TestCase):
         )
 
     def test_gmail_is_a_login_candidate(self) -> None:
-        self.assertIn("user@example.com", username_candidates("UserName@Gmail.com"))
+        self.assertIn("username@gmail.com", username_candidates("UserName@Gmail.com"))
         self.assertIn(
             "UserName@Gmail.com",
             username_candidates("UserName@Gmail.com"),

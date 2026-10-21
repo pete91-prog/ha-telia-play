@@ -45,13 +45,15 @@ How partners usually finish:
 
 Home Assistant can finish Max without you pasting the 6-digit code, using **your** inbox. This integration does **not** create or host a shared mailbox for those emails.
 
+Create that mailbox yourself if you want a dedicated address. Enter the address, password, and IMAP login **only in Home Assistant** (Telia Play → Configure, or Home Assistant’s IMAP integration). Do **not** put that email, app password, Telia login, or any token in this GitHub repository.
+
 1. Use the same address on the Max page as the inbox Home Assistant can read, **or** forward Max mail to that inbox.
 2. Either:
    - **Telia Play → Configure**: IMAP server (Gmail: `imap.gmail.com`), port `993`, mailbox email, and password. Gmail needs an [app password](https://support.google.com/accounts/answer/185833) and IMAP enabled.
    - **or** add Home Assistant’s built-in **IMAP** integration on that same inbox. New `imap_content` events are picked up automatically.
 3. Enable Max (or press **Activate HBO/Max**). Telia’s SMS link is opened from the API; when Max mails the code, it is submitted on its own.
 
-Polling runs only while Max still needs a code. The mailbox password stays in the Telia Play config entry (same as your Telia password).
+Polling runs only while Max still needs a code. Credentials stay in your Home Assistant config entry, not in git.
 
 ## Install with HACS
 

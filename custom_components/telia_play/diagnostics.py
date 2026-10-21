@@ -11,16 +11,20 @@ from homeassistant.core import HomeAssistant
 from .const import (
     CONF_ACCESS_TOKEN,
     CONF_IMAP_PASSWORD,
+    CONF_IMAP_USERNAME,
     CONF_PASSWORD,
     CONF_REFRESH_TOKEN,
+    CONF_USERNAME,
     DOMAIN,
 )
 from .coordinator import TeliaPlayCoordinator
 
 TO_REDACT = {
+    CONF_USERNAME,
     CONF_PASSWORD,
     CONF_ACCESS_TOKEN,
     CONF_REFRESH_TOKEN,
+    CONF_IMAP_USERNAME,
     CONF_IMAP_PASSWORD,
     "raw",
 }

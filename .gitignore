@@ -4,3 +4,9 @@ __pycache__/
 .mypy_cache/
 .netlify
 agent-tools/
+.env
+.env.*
+secrets.yaml
+*.pem
+*.key
+
